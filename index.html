@@ -73,7 +73,7 @@
 <body>
 <section id="authGate" class="auth-shell">
   <div class="auth-card">
-    <h1>ORBIT <span class="badge">v0.9.3</span></h1>
+    <h1>ORBIT <span class="badge">v0.9.3a</span></h1>
     <p class="muted">ログインしてシミュレーションを始めます。</p>
     <form id="loginForm">
       <label>メールアドレス
@@ -90,7 +90,7 @@
 <main id="app" class="hidden">
   <div class="topbar">
     <div>
-      <h1>ORBIT <span class="badge">v0.9.3</span></h1>
+      <h1>ORBIT <span class="badge">v0.9.3a</span></h1>
       <p class="muted" style="margin-bottom:0">人物を選んで、状況を置く。あとは彼らにおまかせ。</p>
     </div>
     <button class="secondary logout" id="logoutBtn">ログアウト</button>
@@ -151,7 +151,7 @@
       <div class="bottom-composer" style="margin-top:14px">
         <h3 id="continuationInputTitle">次の状況（任意）</h3>
         <p class="muted" id="continuationInputHelp">進行中の場面に、新しい出来事や条件を加えます。人物がどう反応するかは彼らに任せます。</p>
-        <textarea id="continuationGm" placeholder="例：突然、大雨が降る。"></textarea>
+        <textarea id="continuationGm" placeholder="例：そのとき、モーディスが帰ってくる。"></textarea>
       </div>
 
       <div class="continuation-actions">
@@ -185,7 +185,7 @@
 (() => {
   const API_BASE = "https://orbit-bridge-production.up.railway.app";
   const SUPABASE_URL = "https://xcfruvbntrwvljighahi.supabase.co";
-  const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_ea8zAcexaqa0i3m2GuJCHQ_F56t0Jwp";
+  const SUPABASE_PUBLISHABLE_KEY = "PASTE_SUPABASE_PUBLISHABLE_KEY_HERE";
   const supabaseClient = window.supabase.createClient(
     SUPABASE_URL,
     SUPABASE_PUBLISHABLE_KEY
@@ -267,13 +267,13 @@
       continuationInputHelp.textContent =
         "話しかけたり、行動したりできます。場面に起きることや条件を書いてもOKです。";
       continuationGm.placeholder =
-        "例：「今日はどこへ行く？」または、例：突然、大雨が降る。";
+        "例：ファイノンに「今日はどこへ行く？」と聞く。";
     }else{
       continuationInputTitle.textContent = "次の状況（任意）";
       continuationInputHelp.textContent =
         "進行中の場面に、新しい出来事や条件を加えます。人物がどう反応するかは彼らに任せます。";
       continuationGm.placeholder =
-        "例：突然、大雨が降る。";
+        "例：そのとき、モーディスが帰ってくる。";
     }
   }
 
@@ -787,7 +787,7 @@
     }
 
     buildBtn.disabled = true;
-    buildBtn.textContent = "シミュレーション中…";
+    buildBtn.textContent = "Opusでシミュレーション中…";
 
     try{
       const data = await api("/api/start", {
@@ -890,7 +890,11 @@
       loginPassword.value = "";
       showAuthState(data.session);
     }catch(e){
-      loginError.textContent = "ログインできませんでした。メールアドレスとパスワードを確認してください。";
+      const message = e?.message || String(e) || "Unknown error";
+      const status = e?.status ? ` [status ${e.status}]` : "";
+      const code = e?.code ? ` [${e.code}]` : "";
+      loginError.textContent = `ログイン失敗: ${message}${status}${code}`;
+      console.error("Supabase login error", e);
       loginError.classList.remove("hidden");
     }finally{
       loginBtn.disabled = false;
