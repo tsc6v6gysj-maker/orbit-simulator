@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ORBIT シミュレーター v0.3</title>
+<style>
+  :root{
+    color-scheme: light dark;
+    --bg:#f6f7f9; --card:#fff; --text:#17181a; --muted:#6f737a; --line:#dfe2e7;
+    --soft:#eef1f5; --accent:#20242a; --accentText:#fff;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{--bg:#111315;--card:#191c20;--text:#f3f4f6;--muted:#a5abb4;--line:#30353c;--soft:#22262b;--accent:#f4f5f7;--accentText:#151719}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+  main{max-width:880px;margin:0 auto;padding:28px 18px 64px}
+  h1{font-size:26px;margin:0 0 6px}
+  h2{font-size:17px;margin:0}
+  p{line-height:1.6}
+  .muted{color:var(--muted);font-size:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-top:14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+  .choice{display:flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:12px;padding:12px;cursor:pointer}
+  .choice input{width:18px;height:18px}
+  .row{display:grid;grid-template-columns:minmax(160px,1fr) minmax(160px,1fr) 2fr;gap:10px;align-items:end}
+  label span{display:block;font-size:12px;color:var(--muted);margin:0 0 5px}
+  select,textarea,input[type=text]{width:100%;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--text);font:inherit;padding:10px}
+  textarea{resize:vertical}
+  button{border:0;border-radius:11px;padding:11px 16px;font:inherit;font-weight:700;cursor:pointer}
+  .primary{background:var(--accent);color:var(--accentText)}
+  .secondary{background:var(--soft);color:var(--text)}
+  .pair{border-top:1px solid var(--line);padding-top:14px;margin-top:14px}
+  .pair:first-child{border-top:0;padding-top:0;margin-top:0}
+  .pair-title{font-weight:700;margin-bottom:9px}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+  .setup{background:var(--soft);border-radius:14px;padding:16px;margin-top:12px}
+  .setup h3{font-size:15px;margin:0 0 10px}
+  .setup-item{padding:9px 0;border-top:1px solid var(--line)}
+  .setup-item:first-of-type{border-top:0}
+  .badge{display:inline-block;font-size:12px;border:1px solid var(--line);padding:3px 7px;border-radius:999px;margin-left:6px;color:var(--muted)}
+  details{margin-top:14px}
+  summary{cursor:pointer;color:var(--muted);font-size:14px}
+  pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-radius:12px;padding:14px;overflow:auto;font-size:12px;line-height:1.5}
+  .hidden{display:none}
+  .hint{padding:12px;background:var(--soft);border-radius:12px;color:var(--muted);font-size:14px}
+  @media(max-width:700px){.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+  <h1>ORBIT シミュレーター <span class="badge">v0.3 Prototype</span></h1>
+  <p class="muted">登場人物と今回の条件を選んで、シミュレーションを開始します。</p>
+
+  <section class="card">
+    <h2>登場人物</h2>
+    <p class="muted">今回のシミュレーションに参加する人物を選択。</p>
+    <div class="grid" id="characters">
+      <label class="choice"><input type="checkbox" value="phainon"><div>ファイノン<br><span class="muted">Phainon</span></div></label>
+      <label class="choice"><input type="checkbox" value="mydeimos"><div>モーディス<br><span class="muted">Mydeimos</span></div></label>
+      <label class="choice"><input type="checkbox" value="wriothesley"><div>リオセスリ<br><span class="muted">Wriothesley</span></div></label>
+      <label class="choice"><input type="checkbox" value="user"><div>自分も参加する<br><span class="muted">User participant</span></div></label>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>今回の関係</h2>
+    <p class="muted">通常は触らなくてOK。専用Relationshipの有無はAutoで裏側解決します。</p>
+    <div id="pairs"><div class="hint">2人以上選ぶと、必要なPairだけ表示されます。</div></div>
+  </section>
+
+  <section class="card">
+    <h2>開始状況</h2>
+    <p class="muted">場所・現在の活動・直前の出来事など。展開や感情は決めなくてOK。</p>
+    <textarea id="situation" rows="4" placeholder="例：三人は夕方の市場で偶然居合わせた。"></textarea>
+
+    <details>
+      <summary>高度なGM指定</summary>
+      <textarea id="gm" rows="3" style="margin-top:10px" placeholder="任意。条件・制約・明示的な出来事など。"></textarea>
+    </details>
+
+    <div class="actions">
+      <button class="secondary" id="randomSituation">🎲 開始状況だけランダム</button>
+      <button class="secondary" id="fullRandom">🎲 今回の設定をランダム</button>
+      <button class="primary" id="build">シミュレーションを開始</button>
+    </div>
+  </section>
+
+  <section class="card hidden" id="result">
+    <h2>今回の設定</h2>
+    <p class="muted">シミュレーション開始時に確定した入力です。</p>
+    <div id="pretty" class="setup"></div>
+
+    <details>
+      <summary>開発者向け：Resolverを見る</summary>
+      <pre id="resolver"></pre>
+    </details>
+
+    <details>
+      <summary>開発者向け：Session Requestを見る</summary>
+      <pre id="json"></pre>
+    </details>
+  </section>
+</main>
+
+<script>
+(() => {
+  const NAMES = {
+    phainon:"ファイノン",
+    mydeimos:"モーディス",
+    wriothesley:"リオセスリ",
+    user:"あなた"
+  };
+
+  const RANDOM_RELATION_FACTS = [
+    {label:"初対面", facts:["They have never met before."]},
+    {label:"面識がある", facts:["They have met before, but no further personal relationship is established."]},
+    {label:"以前一度だけ会った", facts:["They have met exactly once before."]},
+    {label:"以前一度だけ同じ仕事をした", facts:["They previously worked together once."]},
+    {label:"同じ組織に属するが個人的交流は未確定", facts:["They belong to the same organization, but no personal familiarity is established."]},
+    {label:"友人", facts:["They are friends."]},
+    {label:"恋人", facts:["They are romantic partners."]}
+  ];
+
+  const RANDOM_SITUATIONS = [
+    "参加者たちは昼下がりの市場で偶然居合わせた。",
+    "参加者たちは目的地へ向かう途中、急な雨で足止めされている。",
+    "参加者たちは同じ部屋で、それぞれ別のことをして過ごしている。",
+    "参加者たちは共同で簡単な作業を任されている。",
+    "参加者たちは食事の前後に同じ場所へ集まっている。",
+    "参加者たちは移動の待ち時間を一緒に過ごしている。",
+    "参加者たちは予定のない午後を同じ場所で過ごしている。"
+  ];
+
+  // v0.3 prototype registry.
+  // The Builder does not interpret character or relationship content here;
+  // it only resolves stable IDs to registered package locations.
+  const CHARACTER_REGISTRY = {
+    phainon: {
+      id:"phainon",
+      package:"characters/phainon/package.txt"
+    },
+    mydeimos: {
+      id:"mydeimos",
+      package:"characters/mydeimos/package.txt"
+    },
+    wriothesley: {
+      id:"wriothesley",
+      package:"characters/wriothesley/package.txt"
+    }
+  };
+
+  const RELATIONSHIP_REGISTRY = {
+    "mydeimos__phainon": {
+      id:"phainon__mydeimos",
+      participants:["phainon","mydeimos"],
+      package:"relationships/phainon__mydeimos/package.txt"
+    }
+  };
+
+  const RUNTIME_REGISTRY = {
+    relationship_initializer:"runtime/relationship_initializer.txt",
+    user_participant_core:"runtime/user_participant_core.txt"
+  };
+
+  const chars = [...document.querySelectorAll("#characters input")];
+  const pairs = document.getElementById("pairs");
+  const result = document.getElementById("result");
+  const pretty = document.getElementById("pretty");
+  const json = document.getElementById("json");
+  const resolverEl = document.getElementById("resolver");
+  const situation = document.getElementById("situation");
+  const gm = document.getElementById("gm");
+
+  const selected = () => chars.filter(x => x.checked).map(x => x.value);
+  const key = (a,b) => [a,b].sort().join("__");
+
+  function snapshotPairValues(){
+    const s={};
+    document.querySelectorAll(".pair").forEach(el=>{
+      s[el.dataset.key]={
+        condition:el.querySelector(".condition").value,
+        custom:el.querySelector(".custom").value
+      };
+    });
+    return s;
+  }
+
+  function renderPairs(){
+    const prev=snapshotPairValues();
+    const ids=selected();
+    pairs.innerHTML="";
+    if(ids.length<2){
+      pairs.innerHTML='<div class="hint">2人以上選ぶと、必要なPairだけ表示されます。</div>';
+      return;
+    }
+    for(let i=0;i<ids.length;i++){
+      for(let j=i+1;j<ids.length;j++){
+        const a=ids[i], b=ids[j], k=key(a,b);
+        const p=prev[k]||{condition:"none",custom:""};
+        const el=document.createElement("div");
+        el.className="pair";
+        el.dataset.key=k;
+        el.dataset.a=a;
+        el.dataset.b=b;
+        el.innerHTML=`
+          <div class="pair-title">${NAMES[a]} ↔ ${NAMES[b]}</div>
+          <div class="row">
+            <label><span>Relationship Source</span>
+              <select class="source" disabled>
+                <option selected>Auto</option>
+              </select>
+            </label>
+            <label><span>Session Condition</span>
+              <select class="condition">
+                <option value="none">指定なし</option>
+                <option value="random">🎲 Random</option>
+                <option value="first">初対面</option>
+                <option value="friends">友人</option>
+                <option value="romantic">恋人</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+            <label><span>詳細指定（任意）</span>
+              <input class="custom" type="text" placeholder="例：昔一度だけ同じ任務に参加した。">
+            </label>
+          </div>`;
+        el.querySelector(".condition").value=p.condition;
+        el.querySelector(".custom").value=p.custom;
+        pairs.appendChild(el);
+      }
+    }
+  }
+
+  function resolveCondition(mode, custom){
+    let label="指定なし", facts=[];
+    if(mode==="random"){
+      const r=RANDOM_RELATION_FACTS[Math.floor(Math.random()*RANDOM_RELATION_FACTS.length)];
+      label=r.label; facts=[...r.facts];
+    } else if(mode==="first"){
+      label="初対面"; facts=["They have never met before."];
+    } else if(mode==="friends"){
+      label="友人"; facts=["They are friends."];
+    } else if(mode==="romantic"){
+      label="恋人"; facts=["They are romantic partners."];
+    } else if(mode==="custom"){
+      label=custom.trim() ? "Custom" : "指定なし";
+    }
+    if(custom.trim()) facts.push(custom.trim());
+    return {label,facts};
+  }
+
+  function resolveAll(forceRandom=false){
+    const ids=selected();
+    if(!ids.length) return null;
+
+    const rels=[];
+    const display=[];
+    document.querySelectorAll(".pair").forEach(el=>{
+      let mode=el.querySelector(".condition").value;
+      const custom=el.querySelector(".custom").value;
+      if(forceRandom && mode==="none") mode="random";
+      const r=resolveCondition(mode,custom);
+
+      rels.push({
+        participants:[el.dataset.a,el.dataset.b],
+        source:"auto",
+        session_condition:r.label,
+        facts:r.facts
+      });
+
+      display.push({
+        a:el.dataset.a,b:el.dataset.b,
+        source:"Auto",
+        condition:r.label
+      });
+    });
+
+    let start=situation.value.trim();
+    if(forceRandom && !start){
+      start=RANDOM_SITUATIONS[Math.floor(Math.random()*RANDOM_SITUATIONS.length)];
+      situation.value=start;
+    }
+
+    return {
+      request:{
+        participants:ids.map(id=>({id,type:id==="user"?"user":"character"})),
+        relationships:rels,
+        starting_conditions:start,
+        gm_instructions:gm.value.trim()
+      },
+      display
+    };
+  }
+
+
+  function resolveParticipant(id){
+    if(id==="user"){
+      return {
+        id:"user",
+        type:"user",
+        resolution:"user_participant",
+        runtime:RUNTIME_REGISTRY.user_participant_core
+      };
+    }
+    const c=CHARACTER_REGISTRY[id];
+    if(!c){
+      return {
+        id,
+        type:"character",
+        resolution:"missing",
+        error:"Character Package is not registered."
+      };
+    }
+    return {
+      id,
+      type:"character",
+      resolution:"character_package",
+      package:c.package
+    };
+  }
+
+  function resolvePair(pairRequest){
+    const [a,b]=pairRequest.participants;
+    const k=key(a,b);
+
+    // User pairs can still have dedicated Relationship packages in a future
+    // registry, but this prototype has none.
+    const dedicated=RELATIONSHIP_REGISTRY[k];
+
+    const base = dedicated
+      ? {
+          type:"dedicated_relationship",
+          id:dedicated.id,
+          package:dedicated.package
+        }
+      : {
+          type:"relationship_initializer",
+          package:RUNTIME_REGISTRY.relationship_initializer
+        };
+
+    return {
+      participants:[a,b],
+      requested_source:pairRequest.source,
+      resolved_base:base,
+      session_overlay:{
+        condition:pairRequest.session_condition,
+        facts:[...pairRequest.facts]
+      }
+    };
+  }
+
+  function resolveSession(request){
+    return {
+      principle:"FIND WHAT EXISTS. APPLY WHAT WAS STATED. INVENT NOTHING.",
+      participants:request.participants.map(p=>resolveParticipant(p.id)),
+      relationships:request.relationships.map(resolvePair),
+      situation:{
+        starting_conditions:request.starting_conditions,
+        gm_instructions:request.gm_instructions
+      }
+    };
+  }
+
+  function resolverText(resolvedSession){
+    const lines=[];
+    lines.push("ORBIT RESOLVER v0.3");
+    lines.push(resolvedSession.principle);
+    lines.push("");
+    lines.push("PARTICIPANTS");
+    for(const p of resolvedSession.participants){
+      if(p.resolution==="character_package"){
+        lines.push(`✓ Character: ${p.id}`);
+        lines.push(`  → ${p.package}`);
+      }else if(p.resolution==="user_participant"){
+        lines.push("✓ User participant");
+        lines.push(`  → ${p.runtime}`);
+      }else{
+        lines.push(`✗ Character: ${p.id}`);
+        lines.push(`  → ${p.error}`);
+      }
+    }
+
+    lines.push("");
+    lines.push("RELATIONSHIPS");
+    for(const r of resolvedSession.relationships){
+      lines.push(`✓ Pair: ${r.participants[0]} ↔ ${r.participants[1]}`);
+      if(r.resolved_base.type==="dedicated_relationship"){
+        lines.push("  base → dedicated Relationship Package");
+        lines.push(`  → ${r.resolved_base.package}`);
+      }else{
+        lines.push("  base → Relationship Initializer");
+        lines.push(`  → ${r.resolved_base.package}`);
+      }
+      if(r.session_overlay.facts.length){
+        lines.push("  session overlay:");
+        for(const fact of r.session_overlay.facts){
+          lines.push(`    + ${fact}`);
+        }
+      }else{
+        lines.push("  session overlay → none");
+      }
+    }
+
+    lines.push("");
+    lines.push("SITUATION");
+    lines.push(`starting_conditions → ${resolvedSession.situation.starting_conditions || "(unspecified)"}`);
+    lines.push(`gm_instructions → ${resolvedSession.situation.gm_instructions || "(none)"}`);
+    return lines.join("\n");
+  }
+
+  function show(resolved){
+    const {request,display}=resolved;
+    const resolvedSession=resolveSession(request);
+    let h="<h3>Participants</h3>";
+    h+=`<div class="setup-item">${request.participants.map(p=>NAMES[p.id]).join(" / ")}</div>`;
+    h+="<h3 style='margin-top:16px'>Relationships</h3>";
+    for(const d of display){
+      h+=`<div class="setup-item"><strong>${NAMES[d.a]} ↔ ${NAMES[d.b]}</strong><br><span class="muted">Source: ${d.source} / 今回: ${d.condition}</span></div>`;
+    }
+    h+="<h3 style='margin-top:16px'>開始状況</h3>";
+    h+=`<div class="setup-item">${request.starting_conditions || '<span class="muted">指定なし</span>'}</div>`;
+    if(request.gm_instructions){
+      h+="<h3 style='margin-top:16px'>GM指定</h3>";
+      h+=`<div class="setup-item">${request.gm_instructions.replaceAll("<","&lt;").replaceAll(">","&gt;")}</div>`;
+    }
+    pretty.innerHTML=h;
+    resolverEl.textContent=resolverText(resolvedSession);
+    json.textContent=JSON.stringify(request,null,2);
+    result.classList.remove("hidden");
+    result.scrollIntoView({behavior:"smooth",block:"start"});
+  }
+
+  chars.forEach(c=>c.addEventListener("change",renderPairs));
+
+  document.getElementById("randomSituation").addEventListener("click",()=>{
+    situation.value=RANDOM_SITUATIONS[Math.floor(Math.random()*RANDOM_SITUATIONS.length)];
+  });
+
+  document.getElementById("fullRandom").addEventListener("click",()=>{
+    const r=resolveAll(true);
+    if(r) show(r);
+  });
+
+  document.getElementById("build").addEventListener("click",()=>{
+    const r=resolveAll(false);
+    if(r) show(r);
+  });
+
+  renderPairs();
+})();
+</script>
+</body>
+</html>
