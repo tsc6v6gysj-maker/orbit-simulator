@@ -516,8 +516,7 @@
 
     }catch(e){
       errorEl.textContent =
-        "ORBIT /api/start に失敗しました。
-" + e.message;
+        "ORBIT /api/start に失敗しました。\n" + e.message;
       errorEl.classList.remove("hidden");
 
     }finally{
