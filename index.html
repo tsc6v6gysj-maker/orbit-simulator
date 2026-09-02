@@ -52,6 +52,10 @@
   .error{color:var(--error);font-size:14px;margin-top:12px;white-space:pre-wrap}
   .simulation-beat{white-space:pre-wrap;line-height:1.8;padding:16px 0;border-top:1px solid var(--line)}
   .simulation-beat:first-child{border-top:0;padding-top:0}
+  .input-beat{margin:14px 0;padding:12px 14px;border-radius:12px;border:1px solid var(--line);white-space:pre-wrap;line-height:1.7}
+  .input-beat.user-input{background:color-mix(in srgb, #6aa9ff 14%, var(--card))}
+  .input-beat.gm-input{background:color-mix(in srgb, #e5ad55 14%, var(--card))}
+  .input-label{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px}
   .continuation-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
   .bottom-composer{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
   .bottom-composer textarea{min-height:96px}
@@ -61,7 +65,7 @@
 </head>
 <body>
 <main>
-  <h1>ORBIT</h1>
+  <h1>ORBIT <span class="badge">v0.9.2</span></h1>
   <p class="muted">人物を選んで、状況を置く。あとは彼らにおまかせ。</p>
 
   <section class="card">
@@ -123,8 +127,8 @@
       <div id="simulationText" class="setup"></div>
 
       <div class="bottom-composer" style="margin-top:14px">
-        <h3>GMの指示（任意）</h3>
-        <p class="muted">進行中の場面に、新しい出来事や条件を加えます。人物がどう反応するかは彼らに任せます。</p>
+        <h3 id="continuationInputTitle">次の状況（任意）</h3>
+        <p class="muted" id="continuationInputHelp">進行中の場面に、新しい出来事や条件を加えます。人物がどう反応するかは彼らに任せます。</p>
         <textarea id="continuationGm" placeholder="例：そのとき、モーディスが帰ってくる。"></textarea>
       </div>
 
@@ -200,10 +204,13 @@
   const bottomStartingConditions = document.getElementById("bottomStartingConditions");
   const startNewTopicBtn = document.getElementById("startNewTopicBtn");
   const continuationGm = document.getElementById("continuationGm");
+  const continuationInputTitle = document.getElementById("continuationInputTitle");
+  const continuationInputHelp = document.getElementById("continuationInputHelp");
 
   let activeSessionRequest = null;
   let activeDisplay = null;
   let continuityHistory = [];
+  let transcriptLog = [];
 
   const esc = s => String(s ?? "")
     .replaceAll("&","&amp;")
@@ -218,6 +225,43 @@
 
   const key = (a,b) => [a,b].sort().join("__");
   const name = id => NAMES[id] || id;
+
+  function sessionHasUser(){
+    return !!activeSessionRequest?.participants?.some(
+      p => p.type === "user"
+    );
+  }
+
+  function updateContinuationComposer(){
+    if(sessionHasUser()){
+      continuationInputTitle.textContent = "あなたの発言・行動（任意）";
+      continuationInputHelp.textContent =
+        "話しかけたり、行動したりできます。場面に起きることや条件を書いてもOKです。";
+      continuationGm.placeholder =
+        "例：ファイノンに「今日はどこへ行く？」と聞く。";
+    }else{
+      continuationInputTitle.textContent = "次の状況（任意）";
+      continuationInputHelp.textContent =
+        "進行中の場面に、新しい出来事や条件を加えます。人物がどう反応するかは彼らに任せます。";
+      continuationGm.placeholder =
+        "例：そのとき、モーディスが帰ってくる。";
+    }
+  }
+
+  function appendInputBeat(text, type){
+    const block = document.createElement("div");
+    block.className = `input-beat ${type === "user" ? "user-input" : "gm-input"}`;
+
+    const label = document.createElement("div");
+    label.className = "input-label";
+    label.textContent = type === "user" ? "あなた" : "状況追加";
+
+    const body = document.createElement("div");
+    body.textContent = text;
+
+    block.append(label, body);
+    simulationText.appendChild(block);
+  }
 
   async function api(path, options = {}){
     const res = await fetch(API_BASE + path, options);
@@ -528,7 +572,7 @@
     button.textContent = busy ? busyText : idleText;
   }
 
-  async function continueSimulation(gmInstruction = ""){
+  async function continueSimulation(inputText = ""){
     errorEl.classList.add("hidden");
 
     if(!activeSessionRequest || !continuityHistory.length){
@@ -540,6 +584,8 @@
 
     const keyValue = requireKey();
     if(!keyValue) return;
+
+    const inputType = sessionHasUser() ? "user" : "gm";
 
     setBusy(
       continueBtn,
@@ -559,13 +605,27 @@
         body:JSON.stringify({
           session:activeSessionRequest,
           continuity_history:continuityHistory,
-          continuation_gm_instruction:gmInstruction
+          continuation_input:inputText,
+          continuation_input_type:inputType
         })
       });
 
       const text = data.text || "(出力なし)";
+
+      if(inputText){
+        appendInputBeat(inputText, inputType);
+        transcriptLog.push({
+          type:inputType,
+          text:inputText
+        });
+      }
+
       appendBeat(text);
       continuityHistory.push(text);
+      transcriptLog.push({
+        type:"orbit",
+        text
+      });
       continuationGm.value = "";
 
       usageEl.textContent = JSON.stringify({
@@ -615,8 +675,8 @@
       return;
     }
 
-    const participants = (activeDisplay?.participants || [])
-      .map(x => x.name || x.id || String(x))
+    const participants = (activeSessionRequest.participants || [])
+      .map(p => name(p.id))
       .join(" / ");
 
     const lines = [
@@ -632,9 +692,19 @@
       ""
     ].filter(Boolean);
 
-    continuityHistory.forEach((beat, i) => {
-      lines.push(`[Beat ${i + 1}]`);
-      lines.push(beat);
+    let beatNumber = 0;
+    transcriptLog.forEach(entry => {
+      if(entry.type === "user"){
+        lines.push("[あなた]");
+        lines.push(entry.text);
+      }else if(entry.type === "gm"){
+        lines.push("[状況追加]");
+        lines.push(entry.text);
+      }else{
+        beatNumber += 1;
+        lines.push(`[Beat ${beatNumber}]`);
+        lines.push(entry.text);
+      }
       lines.push("");
     });
 
@@ -658,7 +728,7 @@
       errorEl.classList.remove("hidden");
       return;
     }
-    startingConditions.value = value;
+    situation.value = value;
     await run(false);
   }
 
@@ -666,6 +736,7 @@
     activeSessionRequest = null;
     activeDisplay = null;
     continuityHistory = [];
+    transcriptLog = [];
 
     simulationText.textContent = "";
     usageEl.textContent = "";
@@ -716,12 +787,18 @@
       activeSessionRequest = JSON.parse(JSON.stringify(r.request));
       activeDisplay = JSON.parse(JSON.stringify(r.display));
       continuityHistory = [];
+      transcriptLog = [];
       bottomStartingConditions.value = r.request.starting_conditions || "";
+      updateContinuationComposer();
 
       simulationText.textContent = "";
       const text = data.text || "(出力なし)";
       appendBeat(text);
       continuityHistory.push(text);
+      transcriptLog.push({
+        type:"orbit",
+        text
+      });
 
       usageEl.textContent = JSON.stringify({
         mode:"start",
