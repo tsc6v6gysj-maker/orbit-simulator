@@ -122,21 +122,16 @@
       <h2>シミュレーション出力</h2>
       <div id="simulationText" class="setup"></div>
 
+      <div class="bottom-composer" style="margin-top:14px">
+        <h3>GMの指示（任意）</h3>
+        <p class="muted">進行中の場面に、新しい出来事や条件を加えます。人物がどう反応するかは彼らに任せます。</p>
+        <textarea id="continuationGm" placeholder="例：そのとき、モーディスが帰ってくる。"></textarea>
+      </div>
+
       <div class="continuation-actions">
         <button class="primary" id="continueBtn">続きを生成</button>
         <button class="secondary" id="saveConversationBtn">会話を保存</button>
         <button class="secondary" id="newSessionBtn">新しいシミュレーション</button>
-      </div>
-
-      <p class="muted">そのまま続きを見たいときは「続きを生成」。途中で出来事や条件を加えたいときは、下のGM指示を使います。</p>
-
-      <div class="bottom-composer">
-        <h3>GMの指示を追加して続ける</h3>
-        <p class="muted">進行中の場面に、新しい出来事や条件を加えます。人物がどう反応するかは彼らに任せます。</p>
-        <textarea id="continuationGm" placeholder="例：そのとき、モーディスが帰ってくる。"></textarea>
-        <div class="continuation-actions">
-          <button class="primary" id="continueWithGmBtn">この指示を加えて続ける</button>
-        </div>
       </div>
 
       <div class="bottom-composer">
@@ -205,7 +200,6 @@
   const bottomStartingConditions = document.getElementById("bottomStartingConditions");
   const startNewTopicBtn = document.getElementById("startNewTopicBtn");
   const continuationGm = document.getElementById("continuationGm");
-  const continueWithGmBtn = document.getElementById("continueWithGmBtn");
 
   let activeSessionRequest = null;
   let activeDisplay = null;
@@ -606,19 +600,6 @@
     }
   }
 
-  async function continueWithGm(){
-    const instruction = continuationGm.value.trim();
-
-    if(!instruction){
-      errorEl.textContent =
-        "追加するGMの指示を入力してください。";
-      errorEl.classList.remove("hidden");
-      return;
-    }
-
-    await continueSimulation(instruction);
-  }
-
   function safeFilenamePart(value){
     return String(value || "")
       .replace(/[\\/:*?"<>|]/g, "_")
@@ -772,8 +753,9 @@
   document.getElementById("fullRandom").addEventListener("click", () => run(true));
 
   buildBtn.addEventListener("click", () => run(false));
-  continueBtn.addEventListener("click", () => continueSimulation(""));
-  continueWithGmBtn.addEventListener("click", continueWithGm);
+  continueBtn.addEventListener("click", () =>
+    continueSimulation(continuationGm.value.trim())
+  );
   saveConversationBtn.addEventListener("click", saveConversation);
   startNewTopicBtn.addEventListener("click", startBottomTopic);
   newSessionBtn.addEventListener("click", newSimulation);
