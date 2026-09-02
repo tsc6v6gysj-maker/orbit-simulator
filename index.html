@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ORBIT シミュレーター v0.7</title>
+<title>ORBIT シミュレーター v0.8</title>
 <style>
   :root{
     color-scheme: light dark;
@@ -53,12 +53,15 @@
   .simulation-beat{white-space:pre-wrap;line-height:1.8;padding:16px 0;border-top:1px solid var(--line)}
   .simulation-beat:first-child{border-top:0;padding-top:0}
   .continuation-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+  .bottom-composer{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
+  .bottom-composer textarea{min-height:96px}
+  .bottom-composer .row{align-items:end}
   @media(max-width:700px){.row{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <main>
-  <h1>ORBIT シミュレーター <span class="badge">v0.7 Continuation Test</span></h1>
+  <h1>ORBIT シミュレーター <span class="badge">v0.8 Session UI</span></h1>
   <p class="muted">登場人物と今回の条件を選んで、シミュレーションを開始します。</p>
 
   <section class="card">
@@ -121,10 +124,23 @@
 
       <div class="continuation-actions">
         <button class="primary" id="continueBtn">続きを生成</button>
+        <button class="secondary" id="saveConversationBtn">会話を保存</button>
         <button class="secondary" id="newSessionBtn">新しいシミュレーション</button>
       </div>
 
       <p class="muted">「続きを生成」は、開始時の設定を固定したまま、ここまでの出力を現在状態として引き継ぎます。</p>
+
+      <div class="bottom-composer">
+        <h3>別のお題で始める</h3>
+        <p class="muted">人物・関係の選択はそのままに、新しい開始状況だけ差し替えて別セッションを開始します。</p>
+        <div class="row">
+          <label style="flex:1">
+            お題 / 開始状況
+            <textarea id="bottomStartingConditions" placeholder="例：二人は市場からの帰り道。突然、大雨が降り始める。"></textarea>
+          </label>
+          <button class="primary" id="startNewTopicBtn">このお題で開始</button>
+        </div>
+      </div>
 
       <details>
         <summary>開発者向け：直近のUsageを見る</summary>
@@ -175,7 +191,10 @@
   const simulationText = document.getElementById("simulationText");
   const usageEl = document.getElementById("usage");
   const continueBtn = document.getElementById("continueBtn");
+  const saveConversationBtn = document.getElementById("saveConversationBtn");
   const newSessionBtn = document.getElementById("newSessionBtn");
+  const bottomStartingConditions = document.getElementById("bottomStartingConditions");
+  const startNewTopicBtn = document.getElementById("startNewTopicBtn");
 
   let activeSessionRequest = null;
   let activeDisplay = null;
@@ -579,6 +598,68 @@
     }
   }
 
+  function safeFilenamePart(value){
+    return String(value || "")
+      .replace(/[\\/:*?"<>|]/g, "_")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 48);
+  }
+
+  function saveConversation(){
+    if(!activeSessionRequest || !continuityHistory.length){
+      errorEl.textContent = "保存できるシミュレーションがありません。";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+
+    const participants = (activeDisplay?.participants || [])
+      .map(x => x.name || x.id || String(x))
+      .join(" / ");
+
+    const lines = [
+      "ORBIT Simulation Log",
+      "",
+      participants ? `Participants: ${participants}` : "",
+      activeSessionRequest.starting_conditions
+        ? `Starting Conditions: ${activeSessionRequest.starting_conditions}` : "",
+      activeSessionRequest.gm_instructions
+        ? `GM Instructions: ${activeSessionRequest.gm_instructions}` : "",
+      "",
+      "---- Simulation ----",
+      ""
+    ].filter(Boolean);
+
+    continuityHistory.forEach((beat, i) => {
+      lines.push(`[Beat ${i + 1}]`);
+      lines.push(beat);
+      lines.push("");
+    });
+
+    const blob = new Blob([lines.join("\n")], {type:"text/plain;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const topic = safeFilenamePart(activeSessionRequest.starting_conditions);
+    const stamp = new Date().toISOString().slice(0,10);
+    a.href = url;
+    a.download = `ORBIT_${stamp}${topic ? "_" + topic : ""}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function startBottomTopic(){
+    const value = bottomStartingConditions.value.trim();
+    if(!value){
+      errorEl.textContent = "新しいお題 / 開始状況を入力してください。";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+    startingConditions.value = value;
+    await run(false);
+  }
+
   function newSimulation(){
     activeSessionRequest = null;
     activeDisplay = null;
@@ -586,6 +667,7 @@
 
     simulationText.textContent = "";
     usageEl.textContent = "";
+    bottomStartingConditions.value = "";
     simulationWrap.classList.add("hidden");
     result.classList.add("hidden");
     errorEl.classList.add("hidden");
@@ -631,6 +713,7 @@
       activeSessionRequest = JSON.parse(JSON.stringify(r.request));
       activeDisplay = JSON.parse(JSON.stringify(r.display));
       continuityHistory = [];
+      bottomStartingConditions.value = r.request.starting_conditions || "";
 
       simulationText.textContent = "";
       const text = data.text || "(出力なし)";
@@ -668,6 +751,8 @@
 
   buildBtn.addEventListener("click", () => run(false));
   continueBtn.addEventListener("click", continueSimulation);
+  saveConversationBtn.addEventListener("click", saveConversation);
+  startNewTopicBtn.addEventListener("click", startBottomTopic);
   newSessionBtn.addEventListener("click", newSimulation);
 
   loadCatalog();
