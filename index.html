@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ORBIT シミュレーター v0.8</title>
+<title>ORBIT</title>
 <style>
   :root{
     color-scheme: light dark;
@@ -27,7 +27,7 @@
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
   .choice{display:flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:12px;padding:12px;cursor:pointer}
   .choice input{width:18px;height:18px}
-  .row{display:grid;grid-template-columns:minmax(160px,1fr) minmax(160px,1fr) 2fr;gap:10px;align-items:end}
+  .row{display:grid;grid-template-columns:minmax(180px,1fr) 2fr;gap:10px;align-items:end}
   label span{display:block;font-size:12px;color:var(--muted);margin:0 0 5px}
   select,textarea,input[type=text]{width:100%;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--text);font:inherit;padding:10px}
   textarea{resize:vertical}
@@ -61,36 +61,36 @@
 </head>
 <body>
 <main>
-  <h1>ORBIT シミュレーター <span class="badge">v0.8 Session UI</span></h1>
-  <p class="muted">登場人物と今回の条件を選んで、シミュレーションを開始します。</p>
+  <h1>ORBIT</h1>
+  <p class="muted">人物を選んで、状況を置く。あとは彼らにおまかせ。</p>
 
   <section class="card">
     <h2>登場人物</h2>
-    <p class="muted">ORBIT Bridge が利用可能な人物を自動取得します。</p>
+    <p class="muted">この場面に登場する人物を選びます。</p>
     <div class="grid" id="characters">
-      <div class="hint">Character Catalogを読み込み中…</div>
+      <div class="hint">人物を読み込み中…</div>
     </div>
   </section>
 
   <section class="card">
     <h2>今回の関係</h2>
-    <p class="muted">専用Relationshipの有無はAutoで裏側解決します。</p>
-    <div id="pairs"><div class="hint">2人以上選ぶと、必要なPairだけ表示されます。</div></div>
+    <p class="muted">二人の関係を今回だけ指定したいときに選びます。指定しなければ、もともとの関係をそのまま使います。</p>
+    <div id="pairs"><div class="hint">2人以上選ぶと、人物どうしの関係を指定できます。</div></div>
   </section>
 
   <section class="card">
     <h2>開始状況</h2>
-    <p class="muted">場所・現在の活動・直前の出来事など。展開や感情は決めなくてOK。</p>
+    <p class="muted">どんなところから始めるかを書きます。短くても大丈夫です。</p>
     <textarea id="situation" rows="4" placeholder="例：三人は夕方の市場で偶然居合わせた。"></textarea>
 
     <details>
-      <summary>高度なGM指定</summary>
-      <textarea id="gm" rows="3" style="margin-top:10px" placeholder="任意。条件・制約・明示的な出来事など。"></textarea>
+      <summary>GMの指示（任意）</summary>
+      <textarea id="gm" rows="3" style="margin-top:10px" placeholder="この場面で起きることや、決めておきたい条件があれば書いてください。"></textarea>
     </details>
 
     <details>
       <summary>開発者テスト：Start Key</summary>
-      <p class="muted">v0.6の実射試験専用。Railwayの ORBIT_START_KEY を入力します。ページには保存されません。</p>
+      <p class="muted">開発中のみ使用します。Railwayの ORBIT_START_KEY を入力します。ページには保存されません。</p>
       <input id="startKey" type="password" autocomplete="off" placeholder="ORBIT_START_KEY">
     </details>
 
@@ -105,7 +105,7 @@
 
   <section class="card hidden" id="result">
     <h2>今回の設定</h2>
-    <p class="muted">Bridgeがprivate ORBIT Runtimeから解決し、Opusへ渡した今回の設定です。</p>
+    <p class="muted">今回の人物・関係・開始状況です。</p>
     <div id="pretty" class="setup"></div>
 
     <details>
@@ -128,7 +128,16 @@
         <button class="secondary" id="newSessionBtn">新しいシミュレーション</button>
       </div>
 
-      <p class="muted">「続きを生成」は、開始時の設定を固定したまま、ここまでの出力を現在状態として引き継ぎます。</p>
+      <p class="muted">そのまま続きを見たいときは「続きを生成」。途中で出来事や条件を加えたいときは、下のGM指示を使います。</p>
+
+      <div class="bottom-composer">
+        <h3>GMの指示を追加して続ける</h3>
+        <p class="muted">進行中の場面に、新しい出来事や条件を加えます。人物がどう反応するかは彼らに任せます。</p>
+        <textarea id="continuationGm" placeholder="例：そのとき、モーディスが帰ってくる。"></textarea>
+        <div class="continuation-actions">
+          <button class="primary" id="continueWithGmBtn">この指示を加えて続ける</button>
+        </div>
+      </div>
 
       <div class="bottom-composer">
         <h3>別のお題で始める</h3>
@@ -195,6 +204,8 @@
   const newSessionBtn = document.getElementById("newSessionBtn");
   const bottomStartingConditions = document.getElementById("bottomStartingConditions");
   const startNewTopicBtn = document.getElementById("startNewTopicBtn");
+  const continuationGm = document.getElementById("continuationGm");
+  const continueWithGmBtn = document.getElementById("continueWithGmBtn");
 
   let activeSessionRequest = null;
   let activeDisplay = null;
@@ -249,7 +260,7 @@
       user.className = "choice";
       user.innerHTML =
         '<input type="checkbox" value="user">' +
-        '<div>自分も参加する<br><span class="muted">User participant</span></div>';
+        '<div>自分も参加する<br><span class="muted">自分もこの場面に登場します</span></div>';
 
       characters.appendChild(user);
 
@@ -281,7 +292,7 @@
 
     if(ids.length < 2){
       pairs.innerHTML =
-        '<div class="hint">2人以上選ぶと、必要なPairだけ表示されます。</div>';
+        '<div class="hint">2人以上選ぶと、人物どうしの関係を指定できます。</div>';
       return;
     }
 
@@ -302,24 +313,19 @@
           <div class="pair-title">${esc(name(a))} ↔ ${esc(name(b))}</div>
           <div class="row">
             <label>
-              <span>Relationship Source</span>
-              <select disabled><option>Auto</option></select>
-            </label>
-
-            <label>
-              <span>Session Condition</span>
+              <span>今回の関係</span>
               <select class="condition">
                 <option value="none">指定なし</option>
-                <option value="random">🎲 Random</option>
+                <option value="random">🎲 ランダム</option>
                 <option value="first">初対面</option>
                 <option value="friends">友人</option>
                 <option value="romantic">恋人</option>
-                <option value="custom">Custom</option>
+                <option value="custom">自由に指定</option>
               </select>
             </label>
 
             <label>
-              <span>詳細指定（任意）</span>
+              <span>補足（任意）</span>
               <input class="custom" type="text" placeholder="例：昔一度だけ同じ任務に参加した。">
             </label>
           </div>`;
@@ -528,7 +534,7 @@
     button.textContent = busy ? busyText : idleText;
   }
 
-  async function continueSimulation(){
+  async function continueSimulation(gmInstruction = ""){
     errorEl.classList.add("hidden");
 
     if(!activeSessionRequest || !continuityHistory.length){
@@ -558,13 +564,15 @@
         },
         body:JSON.stringify({
           session:activeSessionRequest,
-          continuity_history:continuityHistory
+          continuity_history:continuityHistory,
+          continuation_gm_instruction:gmInstruction
         })
       });
 
       const text = data.text || "(出力なし)";
       appendBeat(text);
       continuityHistory.push(text);
+      continuationGm.value = "";
 
       usageEl.textContent = JSON.stringify({
         mode:"continue",
@@ -596,6 +604,19 @@
       );
       buildBtn.disabled = false;
     }
+  }
+
+  async function continueWithGm(){
+    const instruction = continuationGm.value.trim();
+
+    if(!instruction){
+      errorEl.textContent =
+        "追加するGMの指示を入力してください。";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+
+    await continueSimulation(instruction);
   }
 
   function safeFilenamePart(value){
@@ -668,6 +689,7 @@
     simulationText.textContent = "";
     usageEl.textContent = "";
     bottomStartingConditions.value = "";
+    continuationGm.value = "";
     simulationWrap.classList.add("hidden");
     result.classList.add("hidden");
     errorEl.classList.add("hidden");
@@ -750,7 +772,8 @@
   document.getElementById("fullRandom").addEventListener("click", () => run(true));
 
   buildBtn.addEventListener("click", () => run(false));
-  continueBtn.addEventListener("click", continueSimulation);
+  continueBtn.addEventListener("click", () => continueSimulation(""));
+  continueWithGmBtn.addEventListener("click", continueWithGm);
   saveConversationBtn.addEventListener("click", saveConversation);
   startNewTopicBtn.addEventListener("click", startBottomTopic);
   newSessionBtn.addEventListener("click", newSimulation);
