@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ORBIT シミュレーター v0.5</title>
+<title>ORBIT シミュレーター v0.6</title>
 <style>
   :root{
     color-scheme: light dark;
@@ -55,7 +55,7 @@
 </head>
 <body>
 <main>
-  <h1>ORBIT シミュレーター <span class="badge">v0.5 Bridge</span></h1>
+  <h1>ORBIT シミュレーター <span class="badge">v0.6 Start Test</span></h1>
   <p class="muted">登場人物と今回の条件を選んで、シミュレーションを開始します。</p>
 
   <section class="card">
@@ -82,6 +82,12 @@
       <textarea id="gm" rows="3" style="margin-top:10px" placeholder="任意。条件・制約・明示的な出来事など。"></textarea>
     </details>
 
+    <details>
+      <summary>開発者テスト：Start Key</summary>
+      <p class="muted">v0.6の実射試験専用。Railwayの ORBIT_START_KEY を入力します。ページには保存されません。</p>
+      <input id="startKey" type="password" autocomplete="off" placeholder="ORBIT_START_KEY">
+    </details>
+
     <div class="actions">
       <button class="secondary" id="randomSituation">🎲 開始状況だけランダム</button>
       <button class="secondary" id="fullRandom">🎲 今回の設定をランダム</button>
@@ -93,7 +99,7 @@
 
   <section class="card hidden" id="result">
     <h2>今回の設定</h2>
-    <p class="muted">Bridgeがprivate ORBIT Runtimeから解決した結果です。</p>
+    <p class="muted">Bridgeがprivate ORBIT Runtimeから解決し、Opusへ渡した今回の設定です。</p>
     <div id="pretty" class="setup"></div>
 
     <details>
@@ -105,6 +111,15 @@
       <summary>開発者向け：Session Requestを見る</summary>
       <pre id="json"></pre>
     </details>
+
+    <div id="simulationWrap" class="hidden" style="margin-top:18px">
+      <h2>シミュレーション出力</h2>
+      <div id="simulationText" class="setup" style="white-space:pre-wrap;line-height:1.8"></div>
+      <details>
+        <summary>開発者向け：Usageを見る</summary>
+        <pre id="usage"></pre>
+      </details>
+    </div>
   </section>
 </main>
 
@@ -144,6 +159,10 @@
   const gm = document.getElementById("gm");
   const errorEl = document.getElementById("error");
   const buildBtn = document.getElementById("build");
+  const startKey = document.getElementById("startKey");
+  const simulationWrap = document.getElementById("simulationWrap");
+  const simulationText = document.getElementById("simulationText");
+  const usageEl = document.getElementById("usage");
 
   const esc = s => String(s ?? "")
     .replaceAll("&","&amp;")
@@ -451,6 +470,7 @@
   async function run(forceRandom = false){
     errorEl.classList.add("hidden");
     result.classList.add("hidden");
+    simulationWrap.classList.add("hidden");
 
     const r = makeRequest(forceRandom);
 
@@ -460,21 +480,44 @@
       return;
     }
 
+    const keyValue = startKey.value.trim();
+
+    if(!keyValue){
+      errorEl.textContent = "v0.6実射試験では、開発者テスト欄に ORBIT_START_KEY を入力してください。";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+
     buildBtn.disabled = true;
-    buildBtn.textContent = "Bridgeで解決中…";
+    buildBtn.textContent = "Opusでシミュレーション中…";
 
     try{
-      const data = await api("/api/resolve", {
+      const data = await api("/api/start", {
         method:"POST",
-        headers:{"Content-Type":"application/json"},
+        headers:{
+          "Content-Type":"application/json",
+          "X-ORBIT-START-KEY":keyValue
+        },
         body:JSON.stringify(r.request)
       });
 
-      show(data, r.display, r.request);
+      show(data.resolved, r.display, r.request);
+
+      simulationText.textContent = data.text || "(出力なし)";
+      usageEl.textContent = JSON.stringify({
+        model:data.model,
+        stop_reason:data.stop_reason,
+        usage:data.usage
+      }, null, 2);
+      simulationWrap.classList.remove("hidden");
+
+      // Key is never persisted; clear it immediately after the request.
+      startKey.value = "";
 
     }catch(e){
       errorEl.textContent =
-        "ORBIT Bridgeとの接続に失敗しました。\n" + e.message;
+        "ORBIT /api/start に失敗しました。
+" + e.message;
       errorEl.classList.remove("hidden");
 
     }finally{
