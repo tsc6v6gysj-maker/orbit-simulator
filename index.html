@@ -73,8 +73,9 @@
 <body>
 <section id="authGate" class="auth-shell">
   <div class="auth-card">
-    <h1>ORBIT <span class="badge">v0.9.3</span></h1>
+    <h1>ORBIT <span class="badge">v0.9.4b</span></h1>
     <p class="muted">ログインしてシミュレーションを始めます。</p>
+    <p class="muted">品質改善のため、シミュレーション内容は管理者が確認する場合があります。</p>
     <form id="loginForm">
       <label>メールアドレス
         <input id="loginEmail" type="email" autocomplete="username" required>
@@ -90,7 +91,7 @@
 <main id="app" class="hidden">
   <div class="topbar">
     <div>
-      <h1>ORBIT <span class="badge">v0.9.3</span></h1>
+      <h1>ORBIT <span class="badge">v0.9.4b</span></h1>
       <p class="muted" style="margin-bottom:0">人物を選んで、状況を置く。あとは彼らにおまかせ。</p>
     </div>
     <button class="secondary logout" id="logoutBtn">ログアウト</button>
@@ -185,7 +186,7 @@
 (() => {
   const API_BASE = "https://orbit-bridge-production.up.railway.app";
   const SUPABASE_URL = "https://xcfruvbntrwvljighahi.supabase.co";
-  const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZnJ1dmJudHJ3dmxqaWdoYWhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNTU0NDQsImV4cCI6MjEwMzkzMTQ0NH0.fU9pZEJZJMnQ4cJTefOQm5FU0Au1Xs-_XejMbnY3Bts";
+  const SUPABASE_PUBLISHABLE_KEY = "PASTE_SUPABASE_PUBLISHABLE_KEY_HERE";
   const supabaseClient = window.supabase.createClient(
     SUPABASE_URL,
     SUPABASE_PUBLISHABLE_KEY
@@ -237,6 +238,7 @@
   const continuationInputHelp = document.getElementById("continuationInputHelp");
 
   let activeSessionRequest = null;
+  let activeLogSessionId = null;
   let activeDisplay = null;
   let continuityHistory = [];
   let transcriptLog = [];
@@ -627,6 +629,7 @@
         },
         body:JSON.stringify({
           session:activeSessionRequest,
+          log_session_id:activeLogSessionId,
           continuity_history:continuityHistory,
           continuation_input:inputText,
           continuation_input_type:inputType
@@ -634,6 +637,9 @@
       });
 
       const text = data.text || "(出力なし)";
+      if(data.log_session_id){
+        activeLogSessionId = data.log_session_id;
+      }
 
       if(inputText){
         appendInputBeat(inputText, inputType);
@@ -754,6 +760,7 @@
 
   function newSimulation(){
     activeSessionRequest = null;
+    activeLogSessionId = null;
     activeDisplay = null;
     continuityHistory = [];
     transcriptLog = [];
@@ -801,6 +808,7 @@
 
       // Freeze the session facts at simulation start.
       activeSessionRequest = JSON.parse(JSON.stringify(r.request));
+      activeLogSessionId = data.log_session_id || null;
       activeDisplay = JSON.parse(JSON.stringify(r.display));
       continuityHistory = [];
       transcriptLog = [];
