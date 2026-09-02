@@ -60,13 +60,41 @@
   .bottom-composer{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
   .bottom-composer textarea{min-height:96px}
   .bottom-composer .row{align-items:end}
+  .auth-shell{max-width:460px;margin:12vh auto 0;padding:0 18px}
+  .auth-card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px}
+  .auth-card input{width:100%;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--text);font:inherit;padding:11px;margin-top:5px}
+  .auth-card label{display:block;margin-top:13px;font-size:13px;color:var(--muted)}
+  .auth-card button{width:100%;margin-top:18px}
+  .topbar{display:flex;justify-content:space-between;gap:12px;align-items:center}
+  .logout{padding:8px 11px;font-size:13px}
   @media(max-width:700px){.row{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<main>
-  <h1>ORBIT <span class="badge">v0.9.2</span></h1>
-  <p class="muted">人物を選んで、状況を置く。あとは彼らにおまかせ。</p>
+<section id="authGate" class="auth-shell">
+  <div class="auth-card">
+    <h1>ORBIT <span class="badge">v0.9.3</span></h1>
+    <p class="muted">ログインしてシミュレーションを始めます。</p>
+    <form id="loginForm">
+      <label>メールアドレス
+        <input id="loginEmail" type="email" autocomplete="username" required>
+      </label>
+      <label>パスワード
+        <input id="loginPassword" type="password" autocomplete="current-password" required>
+      </label>
+      <button class="primary" id="loginBtn" type="submit">ログイン</button>
+      <div id="loginError" class="error hidden"></div>
+    </form>
+  </div>
+</section>
+<main id="app" class="hidden">
+  <div class="topbar">
+    <div>
+      <h1>ORBIT <span class="badge">v0.9.3</span></h1>
+      <p class="muted" style="margin-bottom:0">人物を選んで、状況を置く。あとは彼らにおまかせ。</p>
+    </div>
+    <button class="secondary logout" id="logoutBtn">ログアウト</button>
+  </div>
 
   <section class="card">
     <h2>登場人物</h2>
@@ -90,12 +118,6 @@
     <details>
       <summary>GMの指示（任意）</summary>
       <textarea id="gm" rows="3" style="margin-top:10px" placeholder="この場面で起きることや、決めておきたい条件があれば書いてください。"></textarea>
-    </details>
-
-    <details>
-      <summary>開発者テスト：Start Key</summary>
-      <p class="muted">開発中のみ使用します。Railwayの ORBIT_START_KEY を入力します。ページには保存されません。</p>
-      <input id="startKey" type="password" autocomplete="off" placeholder="ORBIT_START_KEY">
     </details>
 
     <div class="actions">
@@ -158,9 +180,17 @@
   </section>
 </main>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (() => {
   const API_BASE = "https://orbit-bridge-production.up.railway.app";
+  const SUPABASE_URL = "https://xcfruvbntrwvljighahi.supabase.co";
+  const SUPABASE_PUBLISHABLE_KEY = "PASTE_SUPABASE_PUBLISHABLE_KEY_HERE";
+  const supabaseClient = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY
+  );
+  let authSession = null;
 
   const NAMES = { user:"あなた" };
 
@@ -194,7 +224,6 @@
   const gm = document.getElementById("gm");
   const errorEl = document.getElementById("error");
   const buildBtn = document.getElementById("build");
-  const startKey = document.getElementById("startKey");
   const simulationWrap = document.getElementById("simulationWrap");
   const simulationText = document.getElementById("simulationText");
   const usageEl = document.getElementById("usage");
@@ -264,9 +293,19 @@
   }
 
   async function api(path, options = {}){
-    const res = await fetch(API_BASE + path, options);
+    const token = authSession?.access_token;
+    if(!token) throw new Error("ログインが必要です。");
+
+    const headers = new Headers(options.headers || {});
+    headers.set("Authorization", `Bearer ${token}`);
+
+    const res = await fetch(API_BASE + path, {...options, headers});
     let body = null;
     try { body = await res.json(); } catch {}
+    if(res.status === 401){
+      await supabaseClient.auth.signOut();
+      throw new Error("ログインの有効期限が切れました。もう一度ログインしてください。");
+    }
     if(!res.ok) throw new Error(body?.message || body?.error || `HTTP ${res.status}`);
     return body;
   }
@@ -554,18 +593,7 @@
     simulationText.appendChild(beat);
   }
 
-  function requireKey(){
-    const keyValue = startKey.value.trim();
 
-    if(!keyValue){
-      errorEl.textContent =
-        "開発者テスト欄に ORBIT_START_KEY を入力してください。";
-      errorEl.classList.remove("hidden");
-      return null;
-    }
-
-    return keyValue;
-  }
 
   function setBusy(button, busy, busyText, idleText){
     button.disabled = busy;
@@ -582,9 +610,6 @@
       return;
     }
 
-    const keyValue = requireKey();
-    if(!keyValue) return;
-
     const inputType = sessionHasUser() ? "user" : "gm";
 
     setBusy(
@@ -599,8 +624,7 @@
       const data = await api("/api/continue", {
         method:"POST",
         headers:{
-          "Content-Type":"application/json",
-          "X-ORBIT-START-KEY":keyValue
+          "Content-Type":"application/json"
         },
         body:JSON.stringify({
           session:activeSessionRequest,
@@ -635,9 +659,6 @@
         stop_reason:data.stop_reason,
         usage:data.usage
       }, null, 2);
-
-      // Test key is not persisted between requests.
-      startKey.value = "";
 
       simulationWrap.scrollIntoView({
         behavior:"smooth",
@@ -765,9 +786,6 @@
       return;
     }
 
-    const keyValue = requireKey();
-    if(!keyValue) return;
-
     buildBtn.disabled = true;
     buildBtn.textContent = "Opusでシミュレーション中…";
 
@@ -775,8 +793,7 @@
       const data = await api("/api/start", {
         method:"POST",
         headers:{
-          "Content-Type":"application/json",
-          "X-ORBIT-START-KEY":keyValue
+          "Content-Type":"application/json"
         },
         body:JSON.stringify(r.request)
       });
@@ -808,9 +825,6 @@
       }, null, 2);
       simulationWrap.classList.remove("hidden");
 
-      // Key is never persisted; clear it immediately after the request.
-      startKey.value = "";
-
     }catch(e){
       errorEl.textContent =
         "ORBIT /api/start に失敗しました。\n" + e.message;
@@ -837,7 +851,65 @@
   startNewTopicBtn.addEventListener("click", startBottomTopic);
   newSessionBtn.addEventListener("click", newSimulation);
 
-  loadCatalog();
+  const authGate = document.getElementById("authGate");
+  const app = document.getElementById("app");
+  const loginForm = document.getElementById("loginForm");
+  const loginBtn = document.getElementById("loginBtn");
+  const loginEmail = document.getElementById("loginEmail");
+  const loginPassword = document.getElementById("loginPassword");
+  const loginError = document.getElementById("loginError");
+  const logoutBtn = document.getElementById("logoutBtn");
+  let catalogLoaded = false;
+
+  function showAuthState(session){
+    authSession = session || null;
+    const signedIn = !!authSession?.access_token;
+    authGate.classList.toggle("hidden", signedIn);
+    app.classList.toggle("hidden", !signedIn);
+    if(signedIn && !catalogLoaded){
+      catalogLoaded = true;
+      loadCatalog();
+    }
+    if(!signedIn){
+      catalogLoaded = false;
+      characters.innerHTML = '<div class="hint">人物を読み込み中…</div>';
+    }
+  }
+
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    loginError.classList.add("hidden");
+    loginBtn.disabled = true;
+    loginBtn.textContent = "ログイン中…";
+    try{
+      const {data, error} = await supabaseClient.auth.signInWithPassword({
+        email: loginEmail.value.trim(),
+        password: loginPassword.value
+      });
+      if(error) throw error;
+      loginPassword.value = "";
+      showAuthState(data.session);
+    }catch(e){
+      loginError.textContent = "ログインできませんでした。メールアドレスとパスワードを確認してください。";
+      loginError.classList.remove("hidden");
+    }finally{
+      loginBtn.disabled = false;
+      loginBtn.textContent = "ログイン";
+    }
+  });
+
+  logoutBtn.addEventListener("click", async () => {
+    await supabaseClient.auth.signOut();
+    showAuthState(null);
+  });
+
+  supabaseClient.auth.onAuthStateChange((_event, session) => {
+    showAuthState(session);
+  });
+
+  supabaseClient.auth.getSession().then(({data}) => {
+    showAuthState(data.session);
+  });
 })();
 </script>
 </body>
