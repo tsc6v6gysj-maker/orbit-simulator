@@ -27,6 +27,12 @@
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
   .choice{display:flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:12px;padding:12px;cursor:pointer}
   .choice input{width:18px;height:18px}
+  .theme-grid{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .theme-chip{position:relative;display:inline-flex}
+  .theme-chip input{position:absolute;opacity:0;pointer-events:none}
+  .theme-chip span{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:9px 13px;cursor:pointer;font-size:14px;background:transparent}
+  .theme-chip input:checked + span{background:var(--accent);color:var(--accentText);border-color:var(--accent)}
+  .theme-note{font-size:12px;color:var(--muted);margin-top:8px}
   .row{display:grid;grid-template-columns:minmax(180px,1fr) 2fr;gap:10px;align-items:end}
   label span{display:block;font-size:12px;color:var(--muted);margin:0 0 5px}
   select,textarea,input[type=text]{width:100%;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--text);font:inherit;padding:10px}
@@ -92,7 +98,7 @@
 <body>
 <section id="authGate" class="auth-shell">
   <div class="auth-card">
-    <h1>ORBIT <span class="badge">v0.9.6a</span></h1>
+    <h1>ORBIT <span class="badge">v0.9.7-theme-style</span></h1>
     <p class="muted">ログインしてシミュレーションを始めます。</p>
     <form id="loginForm">
       <label>メールアドレス
@@ -109,7 +115,7 @@
 <main id="app" class="hidden">
   <div class="topbar">
     <div>
-      <h1>ORBIT <span class="badge">v0.9.6a</span></h1>
+      <h1>ORBIT <span class="badge">v0.9.7-theme-style</span></h1>
       <p class="muted" style="margin-bottom:0">人物を選んで、状況を置く。あとは彼らにおまかせ。</p>
     </div>
     <button class="secondary logout" id="logoutBtn">ログアウト</button>
@@ -135,6 +141,42 @@
     <h2>今回の関係</h2>
     <p class="muted">二人の関係を今回だけ指定したいときに選びます。指定しなければ、もともとの関係をそのまま使います。</p>
     <div id="pairs"><div class="hint">2人以上選ぶと、人物どうしの関係を指定できます。</div></div>
+  </section>
+
+  <section class="card">
+    <h2>テーマ</h2>
+    <p class="muted">今回の世界・事件の傾向を指定します。人物の性格・判断・口調は変えません。最大2つまで選べます。</p>
+    <div class="theme-grid" id="themeChoices">
+      <label class="theme-chip"><input type="checkbox" value="daily"><span>日常</span></label>
+      <label class="theme-chip"><input type="checkbox" value="romance"><span>ロマンス</span></label>
+      <label class="theme-chip"><input type="checkbox" value="comedy"><span>コメディ</span></label>
+      <label class="theme-chip"><input type="checkbox" value="mystery"><span>ミステリー</span></label>
+      <label class="theme-chip"><input type="checkbox" value="horror"><span>ホラー</span></label>
+      <label class="theme-chip"><input type="checkbox" value="action"><span>アクション</span></label>
+      <label class="theme-chip"><input type="checkbox" value="fantasy"><span>ファンタジー</span></label>
+      <label class="theme-chip"><input type="checkbox" value="suspense"><span>サスペンス</span></label>
+    </div>
+    <div class="theme-note">指定なしでも通常どおり動作します。</div>
+    <label style="display:block;margin-top:14px">
+      <span>自由指定（任意）</span>
+      <input id="themeCustom" type="text" placeholder="例：ミッドサマーのような閉鎖共同体ホラー">
+    </label>
+  </section>
+
+  <section class="card">
+    <h2>文章スタイル</h2>
+    <p class="muted">発生した出来事の文章上の見せ方だけを変更します。人物・出来事・結末は変えません。</p>
+    <select id="writingStyle">
+      <option value="standard">標準</option>
+      <option value="romance_psychology">恋愛心理小説</option>
+      <option value="hardboiled">ハードボイルド</option>
+      <option value="nocturne">夜想文学</option>
+      <option value="warm_youth">温かな青春物語</option>
+      <option value="action">アクション</option>
+      <option value="classic_fantasy">王道ファンタジー</option>
+      <option value="light_novel">ライトノベル</option>
+      <option value="psychological_horror">心理ホラー</option>
+    </select>
   </section>
 
   <section class="card">
@@ -221,7 +263,7 @@
 (() => {
   const API_BASE = "https://orbit-bridge-production.up.railway.app";
   const SUPABASE_URL = "https://xcfruvbntrwvljighahi.supabase.co";
-  const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZnJ1dmJudHJ3dmxqaWdoYWhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNTU0NDQsImV4cCI6MjEwMzkzMTQ0NH0.fU9pZEJZJMnQ4cJTefOQm5FU0Au1Xs-_XejMbnY3Bts";
+  const SUPABASE_PUBLISHABLE_KEY = "PASTE_SUPABASE_PUBLISHABLE_KEY_HERE";
   const supabaseClient = window.supabase.createClient(
     SUPABASE_URL,
     SUPABASE_PUBLISHABLE_KEY
@@ -393,6 +435,8 @@
       starting_conditions: activeSessionRequest.starting_conditions || "",
       gm_instructions: activeSessionRequest.gm_instructions || "",
       relationships: activeSessionRequest.relationships || [],
+      theme: activeSessionRequest.theme || {themes:[], custom:""},
+      rendering: activeSessionRequest.rendering || {writing_style:"standard"},
       branch_info: activeBranchMeta || null
     };
     const encrypted = await encryptPrivateLog(
@@ -449,6 +493,8 @@
       relationships: activeSessionRequest?.relationships || [],
       starting_conditions: activeSessionRequest?.starting_conditions || "",
       gm_instructions: activeSessionRequest?.gm_instructions || "",
+      theme: activeSessionRequest?.theme || {themes:[], custom:""},
+      rendering: activeSessionRequest?.rendering || {writing_style:"standard"},
       transcript: transcriptLog.map(entry => ({type:entry.type, text:entry.text})),
       shared_at_client: new Date().toISOString()
     };
@@ -513,6 +559,43 @@
 
   const key = (a,b) => [a,b].sort().join("__");
   const name = id => NAMES[id] || id;
+  const THEME_LABELS = {
+    daily:"日常", romance:"ロマンス", comedy:"コメディ", mystery:"ミステリー",
+    horror:"ホラー", action:"アクション", fantasy:"ファンタジー", suspense:"サスペンス"
+  };
+  const STYLE_LABELS = {
+    standard:"標準",
+    romance_psychology:"恋愛心理小説",
+    hardboiled:"ハードボイルド",
+    nocturne:"夜想文学",
+    warm_youth:"温かな青春物語",
+    action:"アクション",
+    classic_fantasy:"王道ファンタジー",
+    light_novel:"ライトノベル",
+    psychological_horror:"心理ホラー"
+  };
+
+  const themeChoices = document.getElementById("themeChoices");
+  const themeCustom = document.getElementById("themeCustom");
+  const writingStyle = document.getElementById("writingStyle");
+
+  function selectedThemes(){
+    return [...themeChoices.querySelectorAll("input[type=checkbox]:checked")]
+      .map(x => x.value)
+      .slice(0, 2);
+  }
+
+  function enforceThemeLimit(changed){
+    const checked = [...themeChoices.querySelectorAll("input[type=checkbox]:checked")];
+    if(checked.length > 2 && changed){
+      changed.checked = false;
+    }
+  }
+
+  [...themeChoices.querySelectorAll("input[type=checkbox]")].forEach(box => {
+    box.addEventListener("change", () => enforceThemeLimit(box));
+  });
+
 
   function sessionHasUser(){
     return !!activeSessionRequest?.participants?.some(
@@ -834,6 +917,13 @@
       pair.querySelector(".custom").value = restored.custom;
     }
 
+    const requestedThemes = new Set(request.theme?.themes || []);
+    [...themeChoices.querySelectorAll("input[type=checkbox]")].forEach(box => {
+      box.checked = requestedThemes.has(box.value);
+    });
+    themeCustom.value = request.theme?.custom || "";
+    writingStyle.value = request.rendering?.writing_style || "standard";
+
     situation.value = request.starting_conditions || "";
     gm.value = request.gm_instructions || "";
   }
@@ -843,6 +933,12 @@
     h += "<div class='setup-item'>" +
       (request.participants || []).map(p => esc(name(p.id))).join(" / ") +
       "</div>";
+
+    h += "<h3 style='margin-top:16px'>テーマ / 文章スタイル</h3>";
+    const themeLabels = (request.theme?.themes || []).map(x => THEME_LABELS[x] || x);
+    if(request.theme?.custom) themeLabels.push(request.theme.custom);
+    h += `<div class="setup-item"><strong>テーマ:</strong> ${esc(themeLabels.join(" + ") || "指定なし")}<br>` +
+         `<span class="muted">文章スタイル: ${esc(STYLE_LABELS[request.rendering?.writing_style] || request.rendering?.writing_style || "標準")}</span></div>`;
 
     h += "<h3 style='margin-top:16px'>開始状況</h3>";
     h += "<div class='setup-item'>" +
@@ -877,7 +973,9 @@
         })),
         relationships:Array.isArray(context.relationships) ? context.relationships : [],
         starting_conditions:context.starting_conditions || "",
-        gm_instructions:context.gm_instructions || ""
+        gm_instructions:context.gm_instructions || "",
+        theme:context.theme || {themes:[], custom:""},
+        rendering:context.rendering || {writing_style:"standard"}
       };
 
       activeSessionRequest = request;
@@ -1080,7 +1178,14 @@
         })),
         relationships,
         starting_conditions:start,
-        gm_instructions:gm.value.trim()
+        gm_instructions:gm.value.trim(),
+        theme:{
+          themes:selectedThemes(),
+          custom:themeCustom.value.trim()
+        },
+        rendering:{
+          writing_style:writingStyle.value || "standard"
+        }
       },
       display
     };
@@ -1120,7 +1225,12 @@
       "",
       "SITUATION",
       `starting_conditions → ${r.starting_conditions || "(unspecified)"}`,
-      `gm_instructions → ${r.gm_instructions || "(none)"}`
+      `gm_instructions → ${r.gm_instructions || "(none)"}`,
+      "",
+      "THEME / RENDERING",
+      `themes → ${(r.theme?.themes || []).join(", ") || "(none)"}`,
+      `theme_custom → ${r.theme?.custom || "(none)"}`,
+      `writing_style → ${r.rendering?.writing_style || "standard"}`
     );
 
     return lines.join("\n");
@@ -1152,6 +1262,12 @@
         `<span class="muted">Base: ${esc(source)} / 今回: ${esc(d.condition)}</span>` +
         `</div>`;
     }
+
+    h += "<h3 style='margin-top:16px'>テーマ / 文章スタイル</h3>";
+    const themeLabels = (request.theme?.themes || []).map(x => THEME_LABELS[x] || x);
+    if(request.theme?.custom) themeLabels.push(request.theme.custom);
+    h += `<div class="setup-item"><strong>テーマ:</strong> ${esc(themeLabels.join(" + ") || "指定なし")}<br>` +
+         `<span class="muted">文章スタイル: ${esc(STYLE_LABELS[request.rendering?.writing_style] || request.rendering?.writing_style || "標準")}</span></div>`;
 
     h += "<h3 style='margin-top:16px'>開始状況</h3>";
     h +=
@@ -1385,6 +1501,13 @@
         ? `Starting Conditions: ${activeSessionRequest.starting_conditions}` : "",
       activeSessionRequest.gm_instructions
         ? `GM Instructions: ${activeSessionRequest.gm_instructions}` : "",
+      (activeSessionRequest.theme?.themes?.length || activeSessionRequest.theme?.custom)
+        ? `Theme: ${[
+            ...(activeSessionRequest.theme?.themes || []).map(x => THEME_LABELS[x] || x),
+            ...(activeSessionRequest.theme?.custom ? [activeSessionRequest.theme.custom] : [])
+          ].join(" + ")}` : "",
+      activeSessionRequest.rendering?.writing_style
+        ? `Writing Style: ${STYLE_LABELS[activeSessionRequest.rendering.writing_style] || activeSessionRequest.rendering.writing_style}` : "",
       "",
       "---- Simulation ----",
       ""
