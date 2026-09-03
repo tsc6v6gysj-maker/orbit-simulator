@@ -77,13 +77,16 @@
   .saved-session-title{font-weight:700;line-height:1.45}
   .saved-session-meta{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.5}
   .saved-session button{padding:8px 12px;font-size:13px;flex:0 0 auto}
+  .branch-row{display:flex;justify-content:flex-end;margin-top:8px}
+  .branch-btn{padding:6px 10px;font-size:12px;border:1px solid var(--line);border-radius:9px;background:transparent;color:var(--muted);cursor:pointer}
+  .branch-btn:hover{color:var(--text);background:var(--soft)}
   @media(max-width:700px){.row{grid-template-columns:1fr}.saved-session-head{flex-direction:column}.saved-session button{width:100%}}
 </style>
 </head>
 <body>
 <section id="authGate" class="auth-shell">
   <div class="auth-card">
-    <h1>ORBIT <span class="badge">v0.9.5</span></h1>
+    <h1>ORBIT <span class="badge">v0.9.6</span></h1>
     <p class="muted">ログインしてシミュレーションを始めます。</p>
     <form id="loginForm">
       <label>メールアドレス
@@ -100,7 +103,7 @@
 <main id="app" class="hidden">
   <div class="topbar">
     <div>
-      <h1>ORBIT <span class="badge">v0.9.5</span></h1>
+      <h1>ORBIT <span class="badge">v0.9.6</span></h1>
       <p class="muted" style="margin-bottom:0">人物を選んで、状況を置く。あとは彼らにおまかせ。</p>
     </div>
     <button class="secondary logout" id="logoutBtn">ログアウト</button>
@@ -212,7 +215,7 @@
 (() => {
   const API_BASE = "https://orbit-bridge-production.up.railway.app";
   const SUPABASE_URL = "https://xcfruvbntrwvljighahi.supabase.co";
-  const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZnJ1dmJudHJ3dmxqaWdoYWhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNTU0NDQsImV4cCI6MjEwMzkzMTQ0NH0.fU9pZEJZJMnQ4cJTefOQm5FU0Au1Xs-_XejMbnY3Bts";
+  const SUPABASE_PUBLISHABLE_KEY = "PASTE_SUPABASE_PUBLISHABLE_KEY_HERE";
   const supabaseClient = window.supabase.createClient(
     SUPABASE_URL,
     SUPABASE_PUBLISHABLE_KEY
@@ -795,9 +798,9 @@
         );
         latestMessageAt = message.created_at || latestMessageAt;
         if(message.kind === "assistant"){
-          appendBeat(text);
           continuityHistory.push(text);
           transcriptLog.push({type:"orbit", text});
+          appendBeat(text, transcriptLog.length - 1);
         }else if(message.kind === "user" || message.kind === "gm"){
           appendInputBeat(text, message.kind);
           transcriptLog.push({type:message.kind, text});
@@ -1063,11 +1066,75 @@
     result.scrollIntoView({behavior:"smooth",block:"start"});
   }
 
-  function appendBeat(text){
+  function appendBeat(text, branchIndex = null){
     const beat = document.createElement("div");
     beat.className = "simulation-beat";
-    beat.textContent = text || "(出力なし)";
+    const body = document.createElement("div");
+    body.textContent = text || "(出力なし)";
+    beat.appendChild(body);
+    if(Number.isInteger(branchIndex)){
+      const row = document.createElement("div");
+      row.className = "branch-row";
+      const button = document.createElement("button");
+      button.className = "branch-btn";
+      button.type = "button";
+      button.textContent = "⑂ ここから分岐";
+      button.addEventListener("click", () => branchFromTranscript(branchIndex));
+      row.appendChild(button);
+      beat.appendChild(row);
+    }
     simulationText.appendChild(beat);
+  }
+
+  function renderTranscript(){
+    simulationText.textContent = "";
+    transcriptLog.forEach((entry, index) => {
+      if(entry.type === "orbit") appendBeat(entry.text, index);
+      else appendInputBeat(entry.text, entry.type);
+    });
+  }
+
+  async function branchFromTranscript(branchIndex){
+    if(!activeSessionRequest || !activeLogSessionId) return;
+    if(!confirm("この地点から別ルートを作ります。元のセッションはそのまま残ります。")) return;
+    errorEl.classList.add("hidden");
+    try{
+      const originalSessionId = activeLogSessionId;
+      const kept = transcriptLog.slice(0, branchIndex + 1);
+      const data = await api("/api/branch", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({session:activeSessionRequest, parent_session_id:originalSessionId})
+      });
+      if(!data.log_session_id) throw new Error("分岐セッションを作成できませんでした。");
+
+      activeLogSessionId = data.log_session_id;
+      activeLogShared = false;
+      activeSharedRevision = -1;
+      transcriptLog = kept.map(x => ({...x}));
+      continuityHistory = kept.filter(x => x.type === "orbit").map(x => x.text);
+      if(!continuityHistory.length) throw new Error("分岐地点に生成履歴がありません。");
+
+      renderTranscript();
+      await safePrivateLog("branch context", storeEncryptedContext);
+      for(const entry of transcriptLog){
+        const kind = entry.type === "orbit" ? "assistant" : entry.type;
+        await safePrivateLog("branch history", async () => storeEncryptedMessage(kind, entry.text));
+      }
+      updatePrivacyControls();
+      await loadSavedSessions();
+      usageEl.textContent = JSON.stringify({
+        mode:"branch",
+        parent_session_id:originalSessionId,
+        branch_session_id:activeLogSessionId,
+        kept_messages:transcriptLog.length
+      }, null, 2);
+      simulationWrap.scrollIntoView({behavior:"smooth", block:"end"});
+    }catch(error){
+      console.error("Branch failed", error);
+      errorEl.textContent = "分岐を作成できませんでした。\n" + error.message;
+      errorEl.classList.remove("hidden");
+    }
   }
 
 
@@ -1125,12 +1192,12 @@
         });
       }
 
-      appendBeat(text);
       continuityHistory.push(text);
       transcriptLog.push({
         type:"orbit",
         text
       });
+      appendBeat(text, transcriptLog.length - 1);
       continuationGm.value = "";
 
       await safePrivateLog("continuation input", async () => {
@@ -1308,12 +1375,12 @@
 
       simulationText.textContent = "";
       const text = data.text || "(出力なし)";
-      appendBeat(text);
       continuityHistory.push(text);
       transcriptLog.push({
         type:"orbit",
         text
       });
+      appendBeat(text, transcriptLog.length - 1);
       activeLogShared = false;
       activeSharedRevision = -1;
 
