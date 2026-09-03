@@ -77,16 +77,22 @@
   .saved-session-title{font-weight:700;line-height:1.45}
   .saved-session-meta{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.5}
   .saved-session button{padding:8px 12px;font-size:13px;flex:0 0 auto}
-  .branch-row{display:flex;justify-content:flex-end;margin-top:8px}
+  .branch-row{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
   .branch-btn{padding:6px 10px;font-size:12px;border:1px solid var(--line);border-radius:9px;background:transparent;color:var(--muted);cursor:pointer}
   .branch-btn:hover{color:var(--text);background:var(--soft)}
+  .branch-nav{display:inline-flex;align-items:center;gap:5px;padding:4px 6px;border:1px solid var(--line);border-radius:999px;background:var(--card);font-size:12px;color:var(--muted)}
+  .branch-nav button{padding:2px 7px;min-width:28px;border-radius:999px;background:transparent;color:var(--text);font-size:12px}
+  .branch-nav button:disabled{opacity:.28;cursor:default}
+  .branch-nav-label{min-width:74px;text-align:center;white-space:nowrap}
+  .branch-origin{display:inline-block;margin-right:7px;padding:2px 7px;border-radius:999px;background:var(--soft);font-size:11px;color:var(--muted);vertical-align:1px}
+  .saved-branch-label{display:inline-block;margin-bottom:5px;padding:2px 7px;border-radius:999px;background:var(--soft);font-size:11px;color:var(--muted)}
   @media(max-width:700px){.row{grid-template-columns:1fr}.saved-session-head{flex-direction:column}.saved-session button{width:100%}}
 </style>
 </head>
 <body>
 <section id="authGate" class="auth-shell">
   <div class="auth-card">
-    <h1>ORBIT <span class="badge">v0.9.6</span></h1>
+    <h1>ORBIT <span class="badge">v0.9.6a</span></h1>
     <p class="muted">ログインしてシミュレーションを始めます。</p>
     <form id="loginForm">
       <label>メールアドレス
@@ -103,7 +109,7 @@
 <main id="app" class="hidden">
   <div class="topbar">
     <div>
-      <h1>ORBIT <span class="badge">v0.9.6</span></h1>
+      <h1>ORBIT <span class="badge">v0.9.6a</span></h1>
       <p class="muted" style="margin-bottom:0">人物を選んで、状況を置く。あとは彼らにおまかせ。</p>
     </div>
     <button class="secondary logout" id="logoutBtn">ログアウト</button>
@@ -215,7 +221,7 @@
 (() => {
   const API_BASE = "https://orbit-bridge-production.up.railway.app";
   const SUPABASE_URL = "https://xcfruvbntrwvljighahi.supabase.co";
-  const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZnJ1dmJudHJ3dmxqaWdoYWhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNTU0NDQsImV4cCI6MjEwMzkzMTQ0NH0.fU9pZEJZJMnQ4cJTefOQm5FU0Au1Xs-_XejMbnY3Bts";
+  const SUPABASE_PUBLISHABLE_KEY = "PASTE_SUPABASE_PUBLISHABLE_KEY_HERE";
   const supabaseClient = window.supabase.createClient(
     SUPABASE_URL,
     SUPABASE_PUBLISHABLE_KEY
@@ -277,6 +283,8 @@
   let transcriptLog = [];
   let activeLogShared = false;
   let activeSharedRevision = -1;
+  let activeBranchMeta = null;
+  let savedSessionCatalog = [];
   const logKeyCache = new Map();
   const LOG_ENCRYPTION_VERSION = "aes-gcm-v1";
 
@@ -384,7 +392,8 @@
     const sensitiveContext = {
       starting_conditions: activeSessionRequest.starting_conditions || "",
       gm_instructions: activeSessionRequest.gm_instructions || "",
-      relationships: activeSessionRequest.relationships || []
+      relationships: activeSessionRequest.relationships || [],
+      branch_info: activeBranchMeta || null
     };
     const encrypted = await encryptPrivateLog(
       activeLogSessionId, JSON.stringify(sensitiveContext)
@@ -629,6 +638,7 @@
 
   async function loadSavedSessions(){
     if(!authSession?.access_token){
+      savedSessionCatalog = [];
       savedSessionsEl.innerHTML = '<div class="hint">ログインすると保存済みセッションが表示されます。</div>';
       return;
     }
@@ -638,11 +648,12 @@
       const data = await api("/api/sessions");
       const sessions = Array.isArray(data.sessions) ? data.sessions : [];
       if(!sessions.length){
+        savedSessionCatalog = [];
         savedSessionsEl.innerHTML = '<div class="hint">まだ保存済みセッションはありません。</div>';
         return;
       }
 
-      savedSessionsEl.innerHTML = "";
+      const records = [];
       for(const session of sessions){
         const hasKey = hasStoredLogKey(session.id);
         let context = null;
@@ -655,7 +666,19 @@
             console.warn("Saved session context could not be decrypted", session.id, error);
           }
         }
+        records.push({...session, context, readable});
+      }
+      savedSessionCatalog = records;
 
+      const parentIds = new Set(
+        records.map(r => r.context?.branch_info?.parent_session_id).filter(Boolean)
+      );
+
+      savedSessionsEl.innerHTML = "";
+      for(const record of records){
+        const session = record;
+        const context = record.context;
+        const readable = record.readable;
         const participants = (session.participant_ids || [])
           .map(id => name(id))
           .join(" / ") || "参加者不明";
@@ -665,11 +688,19 @@
         const meta = [participants, formatSavedTime(session.updated_at || session.created_at)]
           .filter(Boolean).join(" ・ ");
 
+        let routeLabel = "";
+        if(readable && context?.branch_info?.parent_session_id){
+          routeLabel = "↳ 分岐";
+        }else if(readable && parentIds.has(session.id)){
+          routeLabel = "本線";
+        }
+
         const card = document.createElement("div");
         card.className = "saved-session";
         card.innerHTML = `
           <div class="saved-session-head">
             <div>
+              ${routeLabel ? `<div class="saved-branch-label">${esc(routeLabel)}</div>` : ""}
               <div class="saved-session-title">${esc(title)}</div>
               <div class="saved-session-meta">${esc(meta)}</div>
             </div>
@@ -682,6 +713,13 @@
           note.textContent = "復号鍵はこのブラウザ内だけに保存されます。別端末や鍵を失ったセッションは管理者にも復元できません。";
           card.appendChild(note);
         }else{
+          const info = context?.branch_info;
+          if(info?.branch_anchor){
+            const note = document.createElement("div");
+            note.className = "saved-session-meta";
+            note.textContent = `分岐地点：${shortSavedTitle(info.branch_anchor)}`;
+            card.appendChild(note);
+          }
           card.querySelector(".resume-session").addEventListener("click", () => {
             resumeSavedSession(session.id);
           });
@@ -692,6 +730,75 @@
       console.error("Saved session list failed", error);
       savedSessionsEl.innerHTML = '<div class="error">保存済みセッションを読み込めませんでした。</div>';
     }
+  }
+
+  function branchGroupForIndex(branchIndex){
+    if(!activeLogSessionId || !Number.isInteger(branchIndex)) return null;
+    const readable = savedSessionCatalog.filter(r => r.readable);
+
+    // If the current route is itself a branch, show its parent + sibling branches
+    // at the exact checkpoint where this route diverged.
+    const own = activeBranchMeta;
+    if(own?.parent_session_id && own.branch_point_index === branchIndex){
+      const siblings = readable
+        .filter(r => r.context?.branch_info?.parent_session_id === own.parent_session_id &&
+                     r.context?.branch_info?.branch_point_index === own.branch_point_index)
+        .sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+      const parent = readable.find(r => r.id === own.parent_session_id);
+      const routes = [parent, ...siblings].filter(Boolean);
+      if(routes.length > 1) return {routes, parentId:own.parent_session_id};
+    }
+
+    // On a parent route, show child branches exactly where they were created.
+    const children = readable
+      .filter(r => r.context?.branch_info?.parent_session_id === activeLogSessionId &&
+                   r.context?.branch_info?.branch_point_index === branchIndex)
+      .sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+    if(children.length){
+      const current = readable.find(r => r.id === activeLogSessionId) || {id:activeLogSessionId};
+      return {routes:[current, ...children], parentId:activeLogSessionId};
+    }
+    return null;
+  }
+
+  function routeLabel(group, route, index){
+    if(route.id === group.parentId) return "本線";
+    let n = 0;
+    for(let i=0;i<=index;i++){
+      if(group.routes[i].id !== group.parentId) n++;
+    }
+    return `分岐 ${n}`;
+  }
+
+  function appendBranchNavigator(row, branchIndex){
+    const group = branchGroupForIndex(branchIndex);
+    if(!group || group.routes.length < 2) return;
+    const currentIndex = group.routes.findIndex(r => r.id === activeLogSessionId);
+    if(currentIndex < 0) return;
+
+    const nav = document.createElement("div");
+    nav.className = "branch-nav";
+
+    const prev = document.createElement("button");
+    prev.type = "button";
+    prev.textContent = "‹";
+    prev.disabled = currentIndex <= 0;
+    prev.title = "前のルート";
+    prev.addEventListener("click", () => resumeSavedSession(group.routes[currentIndex - 1].id));
+
+    const label = document.createElement("span");
+    label.className = "branch-nav-label";
+    label.textContent = `${routeLabel(group, group.routes[currentIndex], currentIndex)} · ${currentIndex + 1}/${group.routes.length}`;
+
+    const next = document.createElement("button");
+    next.type = "button";
+    next.textContent = "›";
+    next.disabled = currentIndex >= group.routes.length - 1;
+    next.title = "次のルート";
+    next.addEventListener("click", () => resumeSavedSession(group.routes[currentIndex + 1].id));
+
+    nav.append(prev, label, next);
+    row.appendChild(nav);
   }
 
   function conditionFromFacts(facts = []){
@@ -780,6 +887,7 @@
       transcriptLog = [];
       activeLogShared = !!session.shared_with_admin;
       activeSharedRevision = -1;
+      activeBranchMeta = context?.branch_info || null;
 
       applyRequestToBuilder(request);
       showResumedSession(request);
@@ -1075,6 +1183,7 @@
     if(Number.isInteger(branchIndex)){
       const row = document.createElement("div");
       row.className = "branch-row";
+      appendBranchNavigator(row, branchIndex);
       const button = document.createElement("button");
       button.className = "branch-btn";
       button.type = "button";
@@ -1111,6 +1220,13 @@
       activeLogSessionId = data.log_session_id;
       activeLogShared = false;
       activeSharedRevision = -1;
+      activeBranchMeta = {
+        schema_version: 1,
+        parent_session_id: originalSessionId,
+        branch_point_index: branchIndex,
+        branch_anchor: String(transcriptLog[branchIndex]?.text || "").trim().slice(0, 180),
+        created_at_client: new Date().toISOString()
+      };
       transcriptLog = kept.map(x => ({...x}));
       continuityHistory = kept.filter(x => x.type === "orbit").map(x => x.text);
       if(!continuityHistory.length) throw new Error("分岐地点に生成履歴がありません。");
@@ -1123,6 +1239,7 @@
       }
       updatePrivacyControls();
       await loadSavedSessions();
+      renderTranscript();
       usageEl.textContent = JSON.stringify({
         mode:"branch",
         parent_session_id:originalSessionId,
@@ -1321,6 +1438,7 @@
     transcriptLog = [];
     activeLogShared = false;
     activeSharedRevision = -1;
+    activeBranchMeta = null;
 
     simulationText.textContent = "";
     usageEl.textContent = "";
@@ -1367,6 +1485,7 @@
       // Freeze the session facts at simulation start.
       activeSessionRequest = JSON.parse(JSON.stringify(r.request));
       activeLogSessionId = data.log_session_id || null;
+      activeBranchMeta = null;
       activeDisplay = JSON.parse(JSON.stringify(r.display));
       continuityHistory = [];
       transcriptLog = [];
