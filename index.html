@@ -71,13 +71,19 @@
   .auth-card button{width:100%;margin-top:18px}
   .topbar{display:flex;justify-content:space-between;gap:12px;align-items:center}
   .logout{padding:8px 11px;font-size:13px}
-  @media(max-width:700px){.row{grid-template-columns:1fr}}
+  .saved-session-list{display:grid;gap:10px;margin-top:12px}
+  .saved-session{border:1px solid var(--line);border-radius:12px;padding:13px 14px}
+  .saved-session-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+  .saved-session-title{font-weight:700;line-height:1.45}
+  .saved-session-meta{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.5}
+  .saved-session button{padding:8px 12px;font-size:13px;flex:0 0 auto}
+  @media(max-width:700px){.row{grid-template-columns:1fr}.saved-session-head{flex-direction:column}.saved-session button{width:100%}}
 </style>
 </head>
 <body>
 <section id="authGate" class="auth-shell">
   <div class="auth-card">
-    <h1>ORBIT <span class="badge">v0.9.4c</span></h1>
+    <h1>ORBIT <span class="badge">v0.9.5</span></h1>
     <p class="muted">ログインしてシミュレーションを始めます。</p>
     <form id="loginForm">
       <label>メールアドレス
@@ -94,11 +100,19 @@
 <main id="app" class="hidden">
   <div class="topbar">
     <div>
-      <h1>ORBIT <span class="badge">v0.9.4c</span></h1>
+      <h1>ORBIT <span class="badge">v0.9.5</span></h1>
       <p class="muted" style="margin-bottom:0">人物を選んで、状況を置く。あとは彼らにおまかせ。</p>
     </div>
     <button class="secondary logout" id="logoutBtn">ログアウト</button>
   </div>
+
+  <section class="card" id="savedSessionsCard">
+    <h2>前回の続き</h2>
+    <p class="muted">この端末・このブラウザで保存したセッションを再開できます。内容は暗号化されたまま保存されています。</p>
+    <div id="savedSessions" class="saved-session-list">
+      <div class="hint">保存済みセッションを読み込み中…</div>
+    </div>
+  </section>
 
   <section class="card">
     <h2>登場人物</h2>
@@ -198,7 +212,7 @@
 (() => {
   const API_BASE = "https://orbit-bridge-production.up.railway.app";
   const SUPABASE_URL = "https://xcfruvbntrwvljighahi.supabase.co";
-  const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZnJ1dmJudHJ3dmxqaWdoYWhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNTU0NDQsImV4cCI6MjEwMzkzMTQ0NH0.fU9pZEJZJMnQ4cJTefOQm5FU0Au1Xs-_XejMbnY3Bts";
+  const SUPABASE_PUBLISHABLE_KEY = "PASTE_SUPABASE_PUBLISHABLE_KEY_HERE";
   const supabaseClient = window.supabase.createClient(
     SUPABASE_URL,
     SUPABASE_PUBLISHABLE_KEY
@@ -251,6 +265,7 @@
   const privacyStatus = document.getElementById("privacyStatus");
   const shareSessionBtn = document.getElementById("shareSessionBtn");
   const revokeShareBtn = document.getElementById("revokeShareBtn");
+  const savedSessionsEl = document.getElementById("savedSessions");
 
   let activeSessionRequest = null;
   let activeLogSessionId = null;
@@ -278,12 +293,36 @@
     return bytes;
   }
 
-  async function logKeyFor(sessionId){
+  function logKeyStorageKey(sessionId){
+    return `orbit-private-log-key:${sessionId}`;
+  }
+
+  function storedLogKeyBase64(sessionId){
+    if(!sessionId) return null;
+    const storageKey = logKeyStorageKey(sessionId);
+    const persistent = localStorage.getItem(storageKey);
+    if(persistent) return persistent;
+
+    // Migrate v0.9.4c keys that still exist in this tab.
+    const legacy = sessionStorage.getItem(storageKey);
+    if(legacy){
+      localStorage.setItem(storageKey, legacy);
+      sessionStorage.removeItem(storageKey);
+      return legacy;
+    }
+    return null;
+  }
+
+  function hasStoredLogKey(sessionId){
+    return !!storedLogKeyBase64(sessionId);
+  }
+
+  async function logKeyFor(sessionId, createIfMissing = true){
     if(!sessionId) return null;
     if(logKeyCache.has(sessionId)) return logKeyCache.get(sessionId);
 
-    const storageKey = `orbit-private-log-key:${sessionId}`;
-    const saved = sessionStorage.getItem(storageKey);
+    const storageKey = logKeyStorageKey(sessionId);
+    const saved = storedLogKeyBase64(sessionId);
     let key;
 
     if(saved){
@@ -291,11 +330,12 @@
         "raw", base64ToBytes(saved), {name:"AES-GCM"}, false, ["encrypt", "decrypt"]
       );
     }else{
+      if(!createIfMissing) return null;
       key = await crypto.subtle.generateKey(
         {name:"AES-GCM", length:256}, true, ["encrypt", "decrypt"]
       );
       const raw = new Uint8Array(await crypto.subtle.exportKey("raw", key));
-      sessionStorage.setItem(storageKey, bytesToBase64(raw));
+      localStorage.setItem(storageKey, bytesToBase64(raw));
     }
 
     logKeyCache.set(sessionId, key);
@@ -313,6 +353,18 @@
       iv: bytesToBase64(iv),
       encryption_version: LOG_ENCRYPTION_VERSION
     };
+  }
+
+  async function decryptPrivateLog(sessionId, ciphertext, iv){
+    const key = await logKeyFor(sessionId, false);
+    if(!key) throw new Error("この端末に復号鍵がありません。");
+    if(!ciphertext || !iv) throw new Error("暗号化された保存内容がありません。");
+    const plain = await crypto.subtle.decrypt(
+      {name:"AES-GCM", iv:base64ToBytes(iv)},
+      key,
+      base64ToBytes(ciphertext)
+    );
+    return new TextDecoder().decode(plain);
   }
 
   async function safePrivateLog(label, fn){
@@ -538,9 +590,240 @@
       [...characters.querySelectorAll("input")]
         .forEach(c => c.addEventListener("change", renderPairs));
 
+      await loadSavedSessions();
+
     }catch(e){
       characters.innerHTML =
         `<div class="error">人物の読み込みに失敗しました。ページを再読み込みして、もう一度お試しください。</div>`;
+    }
+  }
+
+  function formatSavedTime(value){
+    if(!value) return "";
+    try{
+      return new Intl.DateTimeFormat("ja-JP", {
+        month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit"
+      }).format(new Date(value));
+    }catch{
+      return String(value);
+    }
+  }
+
+  function shortSavedTitle(value){
+    const text = String(value || "").trim().replace(/\s+/g, " ");
+    if(!text) return "開始状況の指定なし";
+    return text.length > 54 ? text.slice(0, 54) + "…" : text;
+  }
+
+  async function decryptSavedContext(session){
+    const raw = await decryptPrivateLog(
+      session.id,
+      session.context_ciphertext,
+      session.context_iv
+    );
+    return JSON.parse(raw);
+  }
+
+  async function loadSavedSessions(){
+    if(!authSession?.access_token){
+      savedSessionsEl.innerHTML = '<div class="hint">ログインすると保存済みセッションが表示されます。</div>';
+      return;
+    }
+
+    savedSessionsEl.innerHTML = '<div class="hint">保存済みセッションを読み込み中…</div>';
+    try{
+      const data = await api("/api/sessions");
+      const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+      if(!sessions.length){
+        savedSessionsEl.innerHTML = '<div class="hint">まだ保存済みセッションはありません。</div>';
+        return;
+      }
+
+      savedSessionsEl.innerHTML = "";
+      for(const session of sessions){
+        const hasKey = hasStoredLogKey(session.id);
+        let context = null;
+        let readable = false;
+        if(hasKey && session.context_ciphertext && session.context_iv){
+          try{
+            context = await decryptSavedContext(session);
+            readable = true;
+          }catch(error){
+            console.warn("Saved session context could not be decrypted", session.id, error);
+          }
+        }
+
+        const participants = (session.participant_ids || [])
+          .map(id => name(id))
+          .join(" / ") || "参加者不明";
+        const title = readable
+          ? shortSavedTitle(context?.starting_conditions)
+          : "🔒 この端末では再開できません";
+        const meta = [participants, formatSavedTime(session.updated_at || session.created_at)]
+          .filter(Boolean).join(" ・ ");
+
+        const card = document.createElement("div");
+        card.className = "saved-session";
+        card.innerHTML = `
+          <div class="saved-session-head">
+            <div>
+              <div class="saved-session-title">${esc(title)}</div>
+              <div class="saved-session-meta">${esc(meta)}</div>
+            </div>
+            <button class="secondary resume-session" ${readable ? "" : "disabled"}>再開</button>
+          </div>`;
+
+        if(!readable){
+          const note = document.createElement("div");
+          note.className = "saved-session-meta";
+          note.textContent = "復号鍵はこのブラウザ内だけに保存されます。別端末や鍵を失ったセッションは管理者にも復元できません。";
+          card.appendChild(note);
+        }else{
+          card.querySelector(".resume-session").addEventListener("click", () => {
+            resumeSavedSession(session.id);
+          });
+        }
+        savedSessionsEl.appendChild(card);
+      }
+    }catch(error){
+      console.error("Saved session list failed", error);
+      savedSessionsEl.innerHTML = '<div class="error">保存済みセッションを読み込めませんでした。</div>';
+    }
+  }
+
+  function conditionFromFacts(facts = []){
+    const list = Array.isArray(facts) ? [...facts] : [];
+    const known = [
+      ["They have never met before.", "first"],
+      ["They are friends.", "friends"],
+      ["They are romantic partners.", "romantic"]
+    ];
+    for(const [fact, mode] of known){
+      if(list.includes(fact)){
+        return {mode, custom:list.filter(x => x !== fact).join(" ")};
+      }
+    }
+    if(!list.length) return {mode:"none", custom:""};
+    return {mode:"custom", custom:list.join(" ")};
+  }
+
+  function applyRequestToBuilder(request){
+    const ids = new Set((request.participants || []).map(p => p.id));
+    [...characters.querySelectorAll("input[type=checkbox]")].forEach(box => {
+      box.checked = ids.has(box.value);
+    });
+    renderPairs();
+
+    for(const rel of request.relationships || []){
+      const relKey = key(...rel.participants);
+      const pair = [...document.querySelectorAll(".pair")]
+        .find(el => el.dataset.key === relKey);
+      if(!pair) continue;
+      const restored = conditionFromFacts(rel.facts || []);
+      pair.querySelector(".condition").value = restored.mode;
+      pair.querySelector(".custom").value = restored.custom;
+    }
+
+    situation.value = request.starting_conditions || "";
+    gm.value = request.gm_instructions || "";
+  }
+
+  function showResumedSession(request){
+    let h = "<h3>Participants</h3>";
+    h += "<div class='setup-item'>" +
+      (request.participants || []).map(p => esc(name(p.id))).join(" / ") +
+      "</div>";
+
+    h += "<h3 style='margin-top:16px'>開始状況</h3>";
+    h += "<div class='setup-item'>" +
+      (request.starting_conditions ? esc(request.starting_conditions) : '<span class="muted">指定なし</span>') +
+      "</div>";
+
+    if(request.gm_instructions){
+      h += "<h3 style='margin-top:16px'>GM指定</h3>";
+      h += `<div class="setup-item">${esc(request.gm_instructions)}</div>`;
+    }
+
+    pretty.innerHTML = h;
+    resolverEl.textContent = "ORBIT SAVED SESSION\nこの端末に保存された暗号化履歴から再開しました。";
+    json.textContent = JSON.stringify(request, null, 2);
+    result.classList.remove("hidden");
+    simulationWrap.classList.remove("hidden");
+  }
+
+  async function resumeSavedSession(sessionId){
+    errorEl.classList.add("hidden");
+    try{
+      const data = await api(`/api/sessions/${encodeURIComponent(sessionId)}`);
+      const session = data.session;
+      const messages = Array.isArray(data.messages) ? data.messages : [];
+      if(!session) throw new Error("保存済みセッションが見つかりません。");
+
+      const context = await decryptSavedContext(session);
+      const request = {
+        participants:(session.participant_ids || []).map(id => ({
+          id,
+          type:id === "user" ? "user" : "character"
+        })),
+        relationships:Array.isArray(context.relationships) ? context.relationships : [],
+        starting_conditions:context.starting_conditions || "",
+        gm_instructions:context.gm_instructions || ""
+      };
+
+      activeSessionRequest = request;
+      activeLogSessionId = session.id;
+      activeDisplay = null;
+      continuityHistory = [];
+      transcriptLog = [];
+      activeLogShared = !!session.shared_with_admin;
+      activeSharedRevision = -1;
+
+      applyRequestToBuilder(request);
+      showResumedSession(request);
+      updateContinuationComposer();
+      bottomStartingConditions.value = request.starting_conditions || "";
+      continuationGm.value = "";
+      simulationText.textContent = "";
+
+      let latestMessageAt = null;
+      for(const message of messages){
+        if(!message.content_ciphertext || !message.content_iv) continue;
+        const text = await decryptPrivateLog(
+          session.id,
+          message.content_ciphertext,
+          message.content_iv
+        );
+        latestMessageAt = message.created_at || latestMessageAt;
+        if(message.kind === "assistant"){
+          appendBeat(text);
+          continuityHistory.push(text);
+          transcriptLog.push({type:"orbit", text});
+        }else if(message.kind === "user" || message.kind === "gm"){
+          appendInputBeat(text, message.kind);
+          transcriptLog.push({type:message.kind, text});
+        }
+      }
+
+      if(!continuityHistory.length){
+        throw new Error("再開できる生成履歴がありません。");
+      }
+
+      if(activeLogShared && session.shared_at && latestMessageAt &&
+         new Date(session.shared_at).getTime() >= new Date(latestMessageAt).getTime()){
+        activeSharedRevision = transcriptLog.length;
+      }
+      updatePrivacyControls();
+      usageEl.textContent = JSON.stringify({
+        mode:"resume",
+        runtime_version:session.runtime_version,
+        saved_messages:messages.length
+      }, null, 2);
+
+      result.scrollIntoView({behavior:"smooth", block:"start"});
+    }catch(error){
+      console.error("Resume saved session failed", error);
+      errorEl.textContent = "保存済みセッションを再開できませんでした。\n" + error.message;
+      errorEl.classList.remove("hidden");
     }
   }
 
@@ -860,6 +1143,7 @@
         );
       });
       updatePrivacyControls();
+      await loadSavedSessions();
 
       usageEl.textContent = JSON.stringify({
         mode:"continue",
@@ -1041,6 +1325,7 @@
         );
       });
       updatePrivacyControls();
+      await loadSavedSessions();
 
       usageEl.textContent = JSON.stringify({
         mode:"start",
@@ -1100,6 +1385,7 @@
     if(!signedIn){
       catalogLoaded = false;
       characters.innerHTML = '<div class="hint">人物を読み込み中…</div>';
+      savedSessionsEl.innerHTML = '<div class="hint">ログインすると保存済みセッションが表示されます。</div>';
     }
   }
 
