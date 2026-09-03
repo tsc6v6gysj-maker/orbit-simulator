@@ -60,6 +60,10 @@
   .bottom-composer{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
   .bottom-composer textarea{min-height:96px}
   .bottom-composer .row{align-items:end}
+  .privacy-box{margin-top:14px;padding:13px 14px;border:1px solid var(--line);border-radius:12px;background:var(--soft)}
+  .privacy-head{font-weight:700;font-size:14px}
+  .privacy-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .privacy-actions button{padding:8px 11px;font-size:13px}
   .auth-shell{max-width:460px;margin:12vh auto 0;padding:0 18px}
   .auth-card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px}
   .auth-card input{width:100%;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--text);font:inherit;padding:11px;margin-top:5px}
@@ -73,9 +77,8 @@
 <body>
 <section id="authGate" class="auth-shell">
   <div class="auth-card">
-    <h1>ORBIT <span class="badge">v0.9.4b</span></h1>
+    <h1>ORBIT <span class="badge">v0.9.4c</span></h1>
     <p class="muted">ログインしてシミュレーションを始めます。</p>
-    <p class="muted">品質改善のため、シミュレーション内容は管理者が確認する場合があります。</p>
     <form id="loginForm">
       <label>メールアドレス
         <input id="loginEmail" type="email" autocomplete="username" required>
@@ -91,7 +94,7 @@
 <main id="app" class="hidden">
   <div class="topbar">
     <div>
-      <h1>ORBIT <span class="badge">v0.9.4b</span></h1>
+      <h1>ORBIT <span class="badge">v0.9.4c</span></h1>
       <p class="muted" style="margin-bottom:0">人物を選んで、状況を置く。あとは彼らにおまかせ。</p>
     </div>
     <button class="secondary logout" id="logoutBtn">ログアウト</button>
@@ -161,6 +164,15 @@
         <button class="secondary" id="newSessionBtn">新しいシミュレーション</button>
       </div>
 
+      <div class="privacy-box">
+        <div class="privacy-head">🔒 非公開ログ</div>
+        <div class="muted" id="privacyStatus">保存ログの本文は暗号化され、管理者からは読めません。</div>
+        <div class="privacy-actions">
+          <button class="secondary" id="shareSessionBtn">現在までの内容を管理者に共有</button>
+          <button class="secondary hidden" id="revokeShareBtn">共有を取り消す</button>
+        </div>
+      </div>
+
       <div class="bottom-composer">
         <h3>別のお題で始める</h3>
         <p class="muted">人物・関係の選択はそのままに、新しい開始状況だけ差し替えて別セッションを開始します。</p>
@@ -186,7 +198,7 @@
 (() => {
   const API_BASE = "https://orbit-bridge-production.up.railway.app";
   const SUPABASE_URL = "https://xcfruvbntrwvljighahi.supabase.co";
-  const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZnJ1dmJudHJ3dmxqaWdoYWhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNTU0NDQsImV4cCI6MjEwMzkzMTQ0NH0.fU9pZEJZJMnQ4cJTefOQm5FU0Au1Xs-_XejMbnY3Bts";
+  const SUPABASE_PUBLISHABLE_KEY = "PASTE_SUPABASE_PUBLISHABLE_KEY_HERE";
   const supabaseClient = window.supabase.createClient(
     SUPABASE_URL,
     SUPABASE_PUBLISHABLE_KEY
@@ -236,12 +248,193 @@
   const continuationGm = document.getElementById("continuationGm");
   const continuationInputTitle = document.getElementById("continuationInputTitle");
   const continuationInputHelp = document.getElementById("continuationInputHelp");
+  const privacyStatus = document.getElementById("privacyStatus");
+  const shareSessionBtn = document.getElementById("shareSessionBtn");
+  const revokeShareBtn = document.getElementById("revokeShareBtn");
 
   let activeSessionRequest = null;
   let activeLogSessionId = null;
   let activeDisplay = null;
   let continuityHistory = [];
   let transcriptLog = [];
+  let activeLogShared = false;
+  let activeSharedRevision = -1;
+  const logKeyCache = new Map();
+  const LOG_ENCRYPTION_VERSION = "aes-gcm-v1";
+
+  function bytesToBase64(bytes){
+    let binary = "";
+    const chunk = 0x8000;
+    for(let i = 0; i < bytes.length; i += chunk){
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  }
+
+  function base64ToBytes(value){
+    const binary = atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for(let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  async function logKeyFor(sessionId){
+    if(!sessionId) return null;
+    if(logKeyCache.has(sessionId)) return logKeyCache.get(sessionId);
+
+    const storageKey = `orbit-private-log-key:${sessionId}`;
+    const saved = sessionStorage.getItem(storageKey);
+    let key;
+
+    if(saved){
+      key = await crypto.subtle.importKey(
+        "raw", base64ToBytes(saved), {name:"AES-GCM"}, false, ["encrypt", "decrypt"]
+      );
+    }else{
+      key = await crypto.subtle.generateKey(
+        {name:"AES-GCM", length:256}, true, ["encrypt", "decrypt"]
+      );
+      const raw = new Uint8Array(await crypto.subtle.exportKey("raw", key));
+      sessionStorage.setItem(storageKey, bytesToBase64(raw));
+    }
+
+    logKeyCache.set(sessionId, key);
+    return key;
+  }
+
+  async function encryptPrivateLog(sessionId, value){
+    const key = await logKeyFor(sessionId);
+    if(!key) throw new Error("Private log key is unavailable.");
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const plain = new TextEncoder().encode(String(value ?? ""));
+    const cipher = new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM", iv}, key, plain));
+    return {
+      ciphertext: bytesToBase64(cipher),
+      iv: bytesToBase64(iv),
+      encryption_version: LOG_ENCRYPTION_VERSION
+    };
+  }
+
+  async function safePrivateLog(label, fn){
+    try{
+      return await fn();
+    }catch(error){
+      console.warn(`ORBIT private logging skipped: ${label}`, error);
+      return null;
+    }
+  }
+
+  async function storeEncryptedContext(){
+    if(!activeLogSessionId || !activeSessionRequest) return;
+    const sensitiveContext = {
+      starting_conditions: activeSessionRequest.starting_conditions || "",
+      gm_instructions: activeSessionRequest.gm_instructions || "",
+      relationships: activeSessionRequest.relationships || []
+    };
+    const encrypted = await encryptPrivateLog(
+      activeLogSessionId, JSON.stringify(sensitiveContext)
+    );
+    await api("/api/log/context", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({log_session_id:activeLogSessionId, ...encrypted})
+    });
+  }
+
+  async function storeEncryptedMessage(kind, content, model = null, usage = null){
+    if(!activeLogSessionId || !content) return;
+    const encrypted = await encryptPrivateLog(activeLogSessionId, content);
+    await api("/api/log/message", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        log_session_id:activeLogSessionId, kind, model, usage, ...encrypted
+      })
+    });
+  }
+
+  function updatePrivacyControls(){
+    if(!activeLogSessionId){
+      privacyStatus.textContent = "このセッションのログは保存されていません。";
+      shareSessionBtn.disabled = true;
+      revokeShareBtn.classList.add("hidden");
+      return;
+    }
+
+    shareSessionBtn.disabled = false;
+    if(!activeLogShared){
+      privacyStatus.textContent = "保存ログの本文は暗号化され、管理者からは読めません。";
+      shareSessionBtn.textContent = "現在までの内容を管理者に共有";
+      revokeShareBtn.classList.add("hidden");
+    }else{
+      const current = activeSharedRevision === transcriptLog.length;
+      privacyStatus.textContent = current
+        ? "現在までの内容を管理者に共有しています。"
+        : "共有後に続きがあります。新しい内容はまだ共有されていません。";
+      shareSessionBtn.textContent = current
+        ? "共有内容を更新"
+        : "現在までの内容を追加共有";
+      revokeShareBtn.classList.remove("hidden");
+    }
+  }
+
+  function currentSharedPayload(){
+    return {
+      schema_version: 1,
+      participants: activeSessionRequest?.participants || [],
+      relationships: activeSessionRequest?.relationships || [],
+      starting_conditions: activeSessionRequest?.starting_conditions || "",
+      gm_instructions: activeSessionRequest?.gm_instructions || "",
+      transcript: transcriptLog.map(entry => ({type:entry.type, text:entry.text})),
+      shared_at_client: new Date().toISOString()
+    };
+  }
+
+  async function shareCurrentSession(){
+    if(!activeLogSessionId || !activeSessionRequest) return;
+    const ok = confirm("現在までのシミュレーション内容を管理者と共有します。よろしいですか？");
+    if(!ok) return;
+    shareSessionBtn.disabled = true;
+    try{
+      await api("/api/log/share", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          log_session_id:activeLogSessionId,
+          shared_payload:currentSharedPayload()
+        })
+      });
+      activeLogShared = true;
+      activeSharedRevision = transcriptLog.length;
+    }catch(error){
+      errorEl.textContent = "共有に失敗しました。\n" + error.message;
+      errorEl.classList.remove("hidden");
+    }finally{
+      updatePrivacyControls();
+    }
+  }
+
+  async function revokeCurrentSessionShare(){
+    if(!activeLogSessionId || !activeLogShared) return;
+    const ok = confirm("管理者への共有を取り消しますか？");
+    if(!ok) return;
+    revokeShareBtn.disabled = true;
+    try{
+      await api("/api/log/unshare", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({log_session_id:activeLogSessionId})
+      });
+      activeLogShared = false;
+      activeSharedRevision = -1;
+    }catch(error){
+      errorEl.textContent = "共有の取り消しに失敗しました。\n" + error.message;
+      errorEl.classList.remove("hidden");
+    }finally{
+      revokeShareBtn.disabled = false;
+      updatePrivacyControls();
+    }
+  }
 
   const esc = s => String(s ?? "")
     .replaceAll("&","&amp;")
@@ -657,6 +850,17 @@
       });
       continuationGm.value = "";
 
+      await safePrivateLog("continuation input", async () => {
+        if(inputText) await storeEncryptedMessage(inputType, inputText);
+      });
+      await safePrivateLog("continuation output", async () => {
+        await storeEncryptedMessage(
+          "assistant", text, data.model || null,
+          {...(data.usage || {}), stop_reason:data.stop_reason || null}
+        );
+      });
+      updatePrivacyControls();
+
       usageEl.textContent = JSON.stringify({
         mode:"continue",
         history_beats_sent:data.history_beats,
@@ -764,6 +968,8 @@
     activeDisplay = null;
     continuityHistory = [];
     transcriptLog = [];
+    activeLogShared = false;
+    activeSharedRevision = -1;
 
     simulationText.textContent = "";
     usageEl.textContent = "";
@@ -772,6 +978,7 @@
     simulationWrap.classList.add("hidden");
     result.classList.add("hidden");
     errorEl.classList.add("hidden");
+    updatePrivacyControls();
 
     document.querySelector("main").scrollIntoView({
       behavior:"smooth",
@@ -823,6 +1030,17 @@
         type:"orbit",
         text
       });
+      activeLogShared = false;
+      activeSharedRevision = -1;
+
+      await safePrivateLog("session context", storeEncryptedContext);
+      await safePrivateLog("initial output", async () => {
+        await storeEncryptedMessage(
+          "assistant", text, data.model || null,
+          {...(data.usage || {}), stop_reason:data.stop_reason || null}
+        );
+      });
+      updatePrivacyControls();
 
       usageEl.textContent = JSON.stringify({
         mode:"start",
@@ -855,6 +1073,8 @@
     continueSimulation(continuationGm.value.trim())
   );
   saveConversationBtn.addEventListener("click", saveConversation);
+  shareSessionBtn.addEventListener("click", shareCurrentSession);
+  revokeShareBtn.addEventListener("click", revokeCurrentSessionShare);
   startNewTopicBtn.addEventListener("click", startBottomTopic);
   newSessionBtn.addEventListener("click", newSimulation);
 
