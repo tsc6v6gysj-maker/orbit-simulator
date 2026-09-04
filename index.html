@@ -247,6 +247,9 @@
 
     <details class="hidden" id="promptDebugWrap">
       <summary>開発者向け：モデルへ送信した内容を見る</summary>
+      <div style="display:flex;justify-content:flex-end;margin:10px 0 8px">
+        <button type="button" class="secondary" id="copyPromptDebug" style="padding:8px 12px;font-size:13px">全文をコピー</button>
+      </div>
       <pre id="promptDebug"></pre>
     </details>
 
@@ -347,6 +350,7 @@
   const resolverEl = document.getElementById("resolver");
   const promptDebugWrap = document.getElementById("promptDebugWrap");
   const promptDebugEl = document.getElementById("promptDebug");
+  const copyPromptDebugBtn = document.getElementById("copyPromptDebug");
   const situation = document.getElementById("situation");
   const gm = document.getElementById("gm");
   const errorEl = document.getElementById("error");
@@ -1350,6 +1354,30 @@
 
     return lines.join("\n");
   }
+
+  async function copyPromptDebug(){
+    const text = promptDebugEl.textContent || "";
+    if(!text) return;
+    const original = copyPromptDebugBtn.textContent;
+    try{
+      await navigator.clipboard.writeText(text);
+      copyPromptDebugBtn.textContent = "コピーしました ✓";
+    }catch(_err){
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+      copyPromptDebugBtn.textContent = "コピーしました ✓";
+    }
+    setTimeout(()=>{ copyPromptDebugBtn.textContent = original; }, 1400);
+  }
+
+  copyPromptDebugBtn.addEventListener("click", copyPromptDebug);
 
   function showPromptDebug(promptDebug){
     if(!promptDebug?.static_prefix && !promptDebug?.dynamic_suffix){
