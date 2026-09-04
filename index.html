@@ -18,7 +18,20 @@
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-  main{max-width:880px;margin:0 auto;padding:28px 18px 64px}
+  main{max-width:1320px;margin:0 auto;padding:28px 18px 64px}
+  .app-layout{display:grid;grid-template-columns:minmax(250px,310px) minmax(0,1fr);gap:18px;align-items:start;margin-top:14px}
+  .history-sidebar{position:sticky;top:14px;max-height:calc(100vh - 28px);overflow:auto}
+  .history-sidebar .card{margin-top:0}
+  .main-column{min-width:0}
+  .setup-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+  .setup-tab{background:var(--soft);color:var(--muted);padding:9px 13px}
+  .setup-tab.active{background:var(--accent);color:var(--accentText)}
+  .setup-panel{display:none}
+  .setup-panel.active{display:block}
+  .setup-panel .card:first-child{margin-top:14px}
+  .session-setup{margin-top:0}
+  .setup-footer{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
+  .history-toggle{display:none}
   h1{font-size:26px;margin:0 0 6px}
   h2{font-size:17px;margin:0}
   p{line-height:1.6}
@@ -101,13 +114,21 @@
   .branch-nav-label{min-width:74px;text-align:center;white-space:nowrap}
   .branch-origin{display:inline-block;margin-right:7px;padding:2px 7px;border-radius:999px;background:var(--soft);font-size:11px;color:var(--muted);vertical-align:1px}
   .saved-branch-label{display:inline-block;margin-bottom:5px;padding:2px 7px;border-radius:999px;background:var(--soft);font-size:11px;color:var(--muted)}
-  @media(max-width:700px){.row{grid-template-columns:1fr}.model-grid{grid-template-columns:1fr}.saved-session-head{flex-direction:column}.saved-session button{width:100%}}
+  @media(max-width:900px){
+    main{max-width:880px}
+    .history-toggle{display:inline-flex}
+    .app-layout{display:block;margin-top:10px}
+    .history-sidebar{display:none;position:static;max-height:none;margin-bottom:14px}
+    .history-sidebar.open{display:block}
+    .main-column{width:100%}
+  }
+  @media(max-width:700px){.row{grid-template-columns:1fr}.model-grid{grid-template-columns:1fr}.saved-session-head{flex-direction:column}.saved-session button{width:100%}.setup-tabs{display:grid;grid-template-columns:repeat(2,1fr)}.setup-tab{width:100%}}
 </style>
 </head>
 <body>
 <section id="authGate" class="auth-shell">
   <div class="auth-card">
-    <h1>ORBIT <span class="badge">v0.10.0-model-switch</span></h1>
+    <h1>ORBIT <span class="badge">v0.11.0-layout</span></h1>
     <p class="muted">ログインしてシミュレーションを始めます。</p>
     <form id="loginForm">
       <label>メールアドレス
@@ -124,105 +145,132 @@
 <main id="app" class="hidden">
   <div class="topbar">
     <div>
-      <h1>ORBIT <span class="badge">v0.10.0-model-switch</span></h1>
+      <h1>ORBIT <span class="badge">v0.11.0-layout</span></h1>
       <p class="muted" style="margin-bottom:0">人物を選んで、状況を置く。あとは彼らにおまかせ。</p>
     </div>
     <button class="secondary logout" id="logoutBtn">ログアウト</button>
   </div>
 
-  <section class="card" id="savedSessionsCard">
-    <h2>前回の続き</h2>
-    <p class="muted">この端末・このブラウザで保存したセッションを再開できます。内容は暗号化されたまま保存されています。</p>
-    <div id="savedSessions" class="saved-session-list">
-      <div class="hint">保存済みセッションを読み込み中…</div>
-    </div>
-  </section>
+  <div class="app-layout">
+    <aside class="history-sidebar" id="historySidebar">
+      <section class="card" id="savedSessionsCard">
+        <h2>履歴</h2>
+        <p class="muted">保存したセッションをここから再開できます。内容は暗号化されたまま保存されています。</p>
+        <div id="savedSessions" class="saved-session-list">
+          <div class="hint">保存済みセッションを読み込み中…</div>
+        </div>
+      </section>
+    </aside>
 
-  <section class="card">
-    <h2>登場人物</h2>
-    <p class="muted">この場面に登場する人物を選びます。</p>
-    <div class="grid" id="characters">
-      <div class="hint">人物を読み込み中…</div>
-    </div>
-  </section>
+    <div class="main-column">
+      <button class="secondary history-toggle" id="historyToggle" type="button">☰ 履歴</button>
 
-  <section class="card">
-    <h2>今回の関係</h2>
-    <p class="muted">二人の関係を今回だけ指定したいときに選びます。指定しなければ、もともとの関係をそのまま使います。</p>
-    <div id="pairs"><div class="hint">2人以上選ぶと、人物どうしの関係を指定できます。</div></div>
-  </section>
+      <section class="card session-setup">
+        <h2>今回のセッション</h2>
+        <p class="muted">参加者や関係、開始状況などを設定します。項目ごとに切り替えられます。</p>
+        <div class="setup-tabs" role="tablist" aria-label="セッション設定">
+          <button class="setup-tab active" type="button" data-setup-tab="participants">参加者</button>
+          <button class="setup-tab" type="button" data-setup-tab="relationship">関係</button>
+          <button class="setup-tab" type="button" data-setup-tab="situation">開始状況</button>
+          <button class="setup-tab" type="button" data-setup-tab="rendering">表示設定</button>
+        </div>
+      </section>
 
-  <section class="card">
-    <h2>使用モデル</h2>
-    <p class="muted">シミュレーションに使う生成モデルを選びます。人物・関係性・現在状態などの設定は変わりません。</p>
-    <div class="model-grid" id="modelChoices">
-      <label class="model-option">
-        <input type="radio" name="orbitModel" value="openai/gpt-5.6-sol" checked>
-        <div class="model-head"><span>GPT-5.6 Sol</span><span class="model-tag">おすすめ</span></div>
-        <div class="model-copy">高速・低コスト・高品質。通常のシミュレーションや試行錯誤におすすめ。</div>
-      </label>
-      <label class="model-option">
-        <input type="radio" name="orbitModel" value="anthropic/claude-opus-5">
-        <div class="model-head"><span>Claude Opus 5</span><span class="model-tag">品質優先</span></div>
-        <div class="model-copy">より時間とコストはかかりますが、複雑な人物再現を最優先したいときに。</div>
-      </label>
-    </div>
-  </section>
+      <div class="setup-panel active" data-setup-panel="participants">
+        <section class="card">
+          <h2>登場人物</h2>
+          <p class="muted">この場面に登場する人物を選びます。</p>
+          <div class="grid" id="characters">
+            <div class="hint">人物を読み込み中…</div>
+          </div>
+        </section>
+      </div>
 
-  <section class="card">
-    <h2>テーマ</h2>
-    <p class="muted">今回の世界・事件の傾向を指定します。人物の性格・判断・口調は変えません。最大2つまで選べます。</p>
-    <div class="theme-grid" id="themeChoices">
-      <label class="theme-chip"><input type="checkbox" value="daily"><span>日常</span></label>
-      <label class="theme-chip"><input type="checkbox" value="romance"><span>ロマンス</span></label>
-      <label class="theme-chip"><input type="checkbox" value="comedy"><span>コメディ</span></label>
-      <label class="theme-chip"><input type="checkbox" value="mystery"><span>ミステリー</span></label>
-      <label class="theme-chip"><input type="checkbox" value="horror"><span>ホラー</span></label>
-      <label class="theme-chip"><input type="checkbox" value="action"><span>アクション</span></label>
-      <label class="theme-chip"><input type="checkbox" value="fantasy"><span>ファンタジー</span></label>
-      <label class="theme-chip"><input type="checkbox" value="suspense"><span>サスペンス</span></label>
-    </div>
-    <div class="theme-note">指定なしでも通常どおり動作します。</div>
-    <label style="display:block;margin-top:14px">
-      <span>自由指定（任意）</span>
-      <input id="themeCustom" type="text" placeholder="例：ミッドサマーのような閉鎖共同体ホラー">
-    </label>
-  </section>
+      <div class="setup-panel" data-setup-panel="relationship">
+        <section class="card">
+          <h2>今回の関係</h2>
+          <p class="muted">人物どうしの関係を今回だけ指定したいときに選びます。指定しなければ、もともとの関係をそのまま使います。</p>
+          <div id="pairs"><div class="hint">2人以上選ぶと、人物どうしの関係を指定できます。</div></div>
+        </section>
+      </div>
 
-  <section class="card">
-    <h2>文章スタイル</h2>
-    <p class="muted">発生した出来事の文章上の見せ方だけを変更します。人物・出来事・結末は変えません。</p>
-    <select id="writingStyle">
-      <option value="standard">標準</option>
-      <option value="romance_psychology">恋愛心理小説</option>
-      <option value="hardboiled">ハードボイルド</option>
-      <option value="nocturne">夜想文学</option>
-      <option value="warm_youth">温かな青春物語</option>
-      <option value="action">アクション</option>
-      <option value="classic_fantasy">王道ファンタジー</option>
-      <option value="light_novel">ライトノベル</option>
-      <option value="psychological_horror">心理ホラー</option>
-    </select>
-  </section>
+      <div class="setup-panel" data-setup-panel="situation">
+        <section class="card">
+          <h2>開始状況</h2>
+          <p class="muted">どんなところから始めるかを書きます。短くても大丈夫です。</p>
+          <textarea id="situation" rows="4" placeholder="例：参加者たちは夕方の市場で偶然居合わせた。"></textarea>
 
-  <section class="card">
-    <h2>開始状況</h2>
-    <p class="muted">どんなところから始めるかを書きます。短くても大丈夫です。</p>
-    <textarea id="situation" rows="4" placeholder="例：参加者たちは夕方の市場で偶然居合わせた。"></textarea>
+          <details>
+            <summary>GMの指示（任意）</summary>
+            <textarea id="gm" rows="3" style="margin-top:10px" placeholder="この場面で起きることや、決めておきたい条件があれば書いてください。"></textarea>
+          </details>
 
-    <details>
-      <summary>GMの指示（任意）</summary>
-      <textarea id="gm" rows="3" style="margin-top:10px" placeholder="この場面で起きることや、決めておきたい条件があれば書いてください。"></textarea>
-    </details>
+          <div class="actions">
+            <button class="secondary" id="randomSituation">🎲 開始状況だけランダム</button>
+            <button class="secondary" id="fullRandom">🎲 今回の設定をランダム</button>
+          </div>
+        </section>
+      </div>
 
-    <div class="actions">
-      <button class="secondary" id="randomSituation">🎲 開始状況だけランダム</button>
-      <button class="secondary" id="fullRandom">🎲 今回の設定をランダム</button>
-      <button class="primary" id="build">シミュレーションを開始</button>
-    </div>
+      <div class="setup-panel" data-setup-panel="rendering">
+        <section class="card">
+          <h2>使用モデル</h2>
+          <p class="muted">シミュレーションに使う生成モデルを選びます。人物・関係性・現在状態などの設定は変わりません。</p>
+          <div class="model-grid" id="modelChoices">
+            <label class="model-option">
+              <input type="radio" name="orbitModel" value="openai/gpt-5.6-sol" checked>
+              <div class="model-head"><span>GPT-5.6 Sol</span><span class="model-tag">おすすめ</span></div>
+              <div class="model-copy">高速・低コスト・高品質。通常のシミュレーションや試行錯誤におすすめ。</div>
+            </label>
+            <label class="model-option">
+              <input type="radio" name="orbitModel" value="anthropic/claude-opus-5">
+              <div class="model-head"><span>Claude Opus 5</span><span class="model-tag">品質優先</span></div>
+              <div class="model-copy">より時間とコストはかかりますが、複雑な人物再現を最優先したいときに。</div>
+            </label>
+          </div>
+        </section>
 
-    <div id="error" class="error hidden"></div>
-  </section>
+        <section class="card">
+          <h2>テーマ</h2>
+          <p class="muted">今回の世界・事件の傾向を指定します。人物の性格・判断・口調は変えません。最大2つまで選べます。</p>
+          <div class="theme-grid" id="themeChoices">
+            <label class="theme-chip"><input type="checkbox" value="daily"><span>日常</span></label>
+            <label class="theme-chip"><input type="checkbox" value="romance"><span>ロマンス</span></label>
+            <label class="theme-chip"><input type="checkbox" value="comedy"><span>コメディ</span></label>
+            <label class="theme-chip"><input type="checkbox" value="mystery"><span>ミステリー</span></label>
+            <label class="theme-chip"><input type="checkbox" value="horror"><span>ホラー</span></label>
+            <label class="theme-chip"><input type="checkbox" value="action"><span>アクション</span></label>
+            <label class="theme-chip"><input type="checkbox" value="fantasy"><span>ファンタジー</span></label>
+            <label class="theme-chip"><input type="checkbox" value="suspense"><span>サスペンス</span></label>
+          </div>
+          <div class="theme-note">指定なしでも通常どおり動作します。</div>
+          <label style="display:block;margin-top:14px">
+            <span>自由指定（任意）</span>
+            <input id="themeCustom" type="text" placeholder="例：閉鎖された共同体を舞台にした不穏なホラー">
+          </label>
+        </section>
+
+        <section class="card">
+          <h2>文章スタイル</h2>
+          <p class="muted">発生した出来事の文章上の見せ方だけを変更します。人物・出来事・結末は変えません。</p>
+          <select id="writingStyle">
+            <option value="standard">標準</option>
+            <option value="romance_psychology">恋愛心理小説</option>
+            <option value="hardboiled">ハードボイルド</option>
+            <option value="nocturne">夜想文学</option>
+            <option value="warm_youth">温かな青春物語</option>
+            <option value="action">アクション</option>
+            <option value="classic_fantasy">王道ファンタジー</option>
+            <option value="light_novel">ライトノベル</option>
+            <option value="psychological_horror">心理ホラー</option>
+          </select>
+        </section>
+      </div>
+
+      <div class="setup-footer">
+        <div id="error" class="error hidden"></div>
+        <button class="primary" id="build">シミュレーションを開始</button>
+      </div>
 
   <section class="card hidden" id="result">
     <h2>今回の設定</h2>
@@ -290,6 +338,8 @@
       </details>
     </div>
   </section>
+    </div>
+  </div>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -632,6 +682,23 @@
   const themeCustom = document.getElementById("themeCustom");
   const writingStyle = document.getElementById("writingStyle");
   const continuationModel = document.getElementById("continuationModel");
+  const historyToggle = document.getElementById("historyToggle");
+  const historySidebar = document.getElementById("historySidebar");
+
+  document.querySelectorAll("[data-setup-tab]").forEach(tab => {
+    tab.addEventListener("click", () => {
+      const target = tab.dataset.setupTab;
+      document.querySelectorAll("[data-setup-tab]").forEach(x => x.classList.toggle("active", x === tab));
+      document.querySelectorAll("[data-setup-panel]").forEach(panel => {
+        panel.classList.toggle("active", panel.dataset.setupPanel === target);
+      });
+    });
+  });
+
+  historyToggle?.addEventListener("click", () => {
+    const open = historySidebar.classList.toggle("open");
+    historyToggle.textContent = open ? "✕ 履歴を閉じる" : "☰ 履歴";
+  });
 
   function selectedThemes(){
     return [...themeChoices.querySelectorAll("input[type=checkbox]:checked")]
