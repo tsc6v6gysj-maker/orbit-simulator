@@ -37,6 +37,15 @@
   label span{display:block;font-size:12px;color:var(--muted);margin:0 0 5px}
   select,textarea,input[type=text]{width:100%;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--text);font:inherit;padding:10px}
   textarea{resize:vertical}
+  .model-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+  .model-option{display:block;border:1px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;background:var(--card)}
+  .model-option:has(input:checked){border-color:var(--text);box-shadow:0 0 0 1px var(--text) inset}
+  .model-option input{position:absolute;opacity:0;pointer-events:none}
+  .model-head{display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:800}
+  .model-tag{font-size:11px;font-weight:700;border:1px solid var(--line);border-radius:999px;padding:3px 7px;color:var(--muted)}
+  .model-copy{font-size:13px;line-height:1.55;color:var(--muted);margin-top:7px}
+  .model-switch-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:14px 0 4px}
+  .model-switch-row select{width:auto;min-width:190px;margin:0}
   button{border:0;border-radius:11px;padding:11px 16px;font:inherit;font-weight:700;cursor:pointer}
   button:disabled{opacity:.55;cursor:wait}
   .primary{background:var(--accent);color:var(--accentText)}
@@ -92,13 +101,13 @@
   .branch-nav-label{min-width:74px;text-align:center;white-space:nowrap}
   .branch-origin{display:inline-block;margin-right:7px;padding:2px 7px;border-radius:999px;background:var(--soft);font-size:11px;color:var(--muted);vertical-align:1px}
   .saved-branch-label{display:inline-block;margin-bottom:5px;padding:2px 7px;border-radius:999px;background:var(--soft);font-size:11px;color:var(--muted)}
-  @media(max-width:700px){.row{grid-template-columns:1fr}.saved-session-head{flex-direction:column}.saved-session button{width:100%}}
+  @media(max-width:700px){.row{grid-template-columns:1fr}.model-grid{grid-template-columns:1fr}.saved-session-head{flex-direction:column}.saved-session button{width:100%}}
 </style>
 </head>
 <body>
 <section id="authGate" class="auth-shell">
   <div class="auth-card">
-    <h1>ORBIT <span class="badge">v0.9.7-theme-style</span></h1>
+    <h1>ORBIT <span class="badge">v0.10.0-model-switch</span></h1>
     <p class="muted">ログインしてシミュレーションを始めます。</p>
     <form id="loginForm">
       <label>メールアドレス
@@ -115,7 +124,7 @@
 <main id="app" class="hidden">
   <div class="topbar">
     <div>
-      <h1>ORBIT <span class="badge">v0.9.7-theme-style</span></h1>
+      <h1>ORBIT <span class="badge">v0.10.0-model-switch</span></h1>
       <p class="muted" style="margin-bottom:0">人物を選んで、状況を置く。あとは彼らにおまかせ。</p>
     </div>
     <button class="secondary logout" id="logoutBtn">ログアウト</button>
@@ -141,6 +150,23 @@
     <h2>今回の関係</h2>
     <p class="muted">二人の関係を今回だけ指定したいときに選びます。指定しなければ、もともとの関係をそのまま使います。</p>
     <div id="pairs"><div class="hint">2人以上選ぶと、人物どうしの関係を指定できます。</div></div>
+  </section>
+
+  <section class="card">
+    <h2>使用モデル</h2>
+    <p class="muted">シミュレーションに使う生成モデルを選びます。人物・関係性・現在状態などの設定は変わりません。</p>
+    <div class="model-grid" id="modelChoices">
+      <label class="model-option">
+        <input type="radio" name="orbitModel" value="openai/gpt-5.6-sol" checked>
+        <div class="model-head"><span>GPT-5.6 Sol</span><span class="model-tag">おすすめ</span></div>
+        <div class="model-copy">高速・低コスト・高品質。通常のシミュレーションや試行錯誤におすすめ。</div>
+      </label>
+      <label class="model-option">
+        <input type="radio" name="orbitModel" value="anthropic/claude-opus-5">
+        <div class="model-head"><span>Claude Opus 5</span><span class="model-tag">品質優先</span></div>
+        <div class="model-copy">より時間とコストはかかりますが、複雑な人物再現を最優先したいときに。</div>
+      </label>
+    </div>
   </section>
 
   <section class="card">
@@ -182,7 +208,7 @@
   <section class="card">
     <h2>開始状況</h2>
     <p class="muted">どんなところから始めるかを書きます。短くても大丈夫です。</p>
-    <textarea id="situation" rows="4" placeholder="例：三人は夕方の市場で偶然居合わせた。"></textarea>
+    <textarea id="situation" rows="4" placeholder="例：参加者たちは夕方の市場で偶然居合わせた。"></textarea>
 
     <details>
       <summary>GMの指示（任意）</summary>
@@ -220,7 +246,15 @@
       <div class="bottom-composer" style="margin-top:14px">
         <h3 id="continuationInputTitle">次の状況（任意）</h3>
         <p class="muted" id="continuationInputHelp">進行中の場面に、新しい出来事や条件を加えます。人物がどう反応するかは彼らに任せます。</p>
-        <textarea id="continuationGm" placeholder="例：そのとき、モーディスが帰ってくる。"></textarea>
+        <textarea id="continuationGm" placeholder="例：そのとき、同行者が帰ってくる。"></textarea>
+      </div>
+
+      <div class="model-switch-row">
+        <span class="muted">次の生成モデル</span>
+        <select id="continuationModel">
+          <option value="openai/gpt-5.6-sol">GPT-5.6 Sol</option>
+          <option value="anthropic/claude-opus-5">Claude Opus 5</option>
+        </select>
       </div>
 
       <div class="continuation-actions">
@@ -244,7 +278,7 @@
         <div class="row">
           <label style="flex:1">
             お題 / 開始状況
-            <textarea id="bottomStartingConditions" placeholder="例：二人は市場からの帰り道。突然、大雨が降り始める。"></textarea>
+            <textarea id="bottomStartingConditions" placeholder="例：参加者たちは市場からの帰り道。突然、大雨が降り始める。"></textarea>
           </label>
           <button class="primary" id="startNewTopicBtn">このお題で開始</button>
         </div>
@@ -437,6 +471,7 @@
       relationships: activeSessionRequest.relationships || [],
       theme: activeSessionRequest.theme || {themes:[], custom:""},
       rendering: activeSessionRequest.rendering || {writing_style:"standard"},
+      execution: activeSessionRequest.execution || {model:DEFAULT_MODEL},
       branch_info: activeBranchMeta || null
     };
     const encrypted = await encryptPrivateLog(
@@ -495,6 +530,7 @@
       gm_instructions: activeSessionRequest?.gm_instructions || "",
       theme: activeSessionRequest?.theme || {themes:[], custom:""},
       rendering: activeSessionRequest?.rendering || {writing_style:"standard"},
+      execution: activeSessionRequest?.execution || {model:DEFAULT_MODEL},
       transcript: transcriptLog.map(entry => ({type:entry.type, text:entry.text})),
       shared_at_client: new Date().toISOString()
     };
@@ -563,6 +599,23 @@
     daily:"日常", romance:"ロマンス", comedy:"コメディ", mystery:"ミステリー",
     horror:"ホラー", action:"アクション", fantasy:"ファンタジー", suspense:"サスペンス"
   };
+  const DEFAULT_MODEL = "openai/gpt-5.6-sol";
+  const MODEL_LABELS = {
+    "openai/gpt-5.6-sol":"GPT-5.6 Sol",
+    "anthropic/claude-opus-5":"Claude Opus 5"
+  };
+
+  function selectedModel(){
+    return document.querySelector('input[name="orbitModel"]:checked')?.value || DEFAULT_MODEL;
+  }
+
+  function setSelectedModel(model){
+    const value = MODEL_LABELS[model] ? model : DEFAULT_MODEL;
+    const radio = document.querySelector(`input[name="orbitModel"][value="${value}"]`);
+    if(radio) radio.checked = true;
+    if(continuationModel) continuationModel.value = value;
+  }
+
   const STYLE_LABELS = {
     standard:"標準",
     romance_psychology:"恋愛心理小説",
@@ -578,6 +631,7 @@
   const themeChoices = document.getElementById("themeChoices");
   const themeCustom = document.getElementById("themeCustom");
   const writingStyle = document.getElementById("writingStyle");
+  const continuationModel = document.getElementById("continuationModel");
 
   function selectedThemes(){
     return [...themeChoices.querySelectorAll("input[type=checkbox]:checked")]
@@ -609,13 +663,13 @@
       continuationInputHelp.textContent =
         "話しかけたり、行動したりできます。場面に起きることや条件を書いてもOKです。";
       continuationGm.placeholder =
-        "例：ファイノンに「今日はどこへ行く？」と聞く。";
+        "例：相手に「今日はどこへ行く？」と聞く。";
     }else{
       continuationInputTitle.textContent = "次の状況（任意）";
       continuationInputHelp.textContent =
         "進行中の場面に、新しい出来事や条件を加えます。人物がどう反応するかは彼らに任せます。";
       continuationGm.placeholder =
-        "例：そのとき、モーディスが帰ってくる。";
+        "例：そのとき、同行者が帰ってくる。";
     }
   }
 
@@ -923,6 +977,7 @@
     });
     themeCustom.value = request.theme?.custom || "";
     writingStyle.value = request.rendering?.writing_style || "standard";
+    setSelectedModel(request.execution?.model || DEFAULT_MODEL);
 
     situation.value = request.starting_conditions || "";
     gm.value = request.gm_instructions || "";
@@ -933,6 +988,9 @@
     h += "<div class='setup-item'>" +
       (request.participants || []).map(p => esc(name(p.id))).join(" / ") +
       "</div>";
+
+    h += "<h3 style='margin-top:16px'>使用モデル</h3>";
+    h += `<div class="setup-item">${esc(MODEL_LABELS[request.execution?.model] || MODEL_LABELS[DEFAULT_MODEL])}</div>`;
 
     h += "<h3 style='margin-top:16px'>テーマ / 文章スタイル</h3>";
     const themeLabels = (request.theme?.themes || []).map(x => THEME_LABELS[x] || x);
@@ -975,7 +1033,8 @@
         starting_conditions:context.starting_conditions || "",
         gm_instructions:context.gm_instructions || "",
         theme:context.theme || {themes:[], custom:""},
-        rendering:context.rendering || {writing_style:"standard"}
+        rendering:context.rendering || {writing_style:"standard"},
+        execution:context.execution || {model:DEFAULT_MODEL}
       };
 
       activeSessionRequest = request;
@@ -1185,6 +1244,9 @@
         },
         rendering:{
           writing_style:writingStyle.value || "standard"
+        },
+        execution:{
+          model:selectedModel()
         }
       },
       display
@@ -1230,7 +1292,10 @@
       "THEME / RENDERING",
       `themes → ${(r.theme?.themes || []).join(", ") || "(none)"}`,
       `theme_custom → ${r.theme?.custom || "(none)"}`,
-      `writing_style → ${r.rendering?.writing_style || "standard"}`
+      `writing_style → ${r.rendering?.writing_style || "standard"}`,
+      "",
+      "EXECUTION",
+      `model → ${r.execution?.model || DEFAULT_MODEL}`
     );
 
     return lines.join("\n");
@@ -1262,6 +1327,9 @@
         `<span class="muted">Base: ${esc(source)} / 今回: ${esc(d.condition)}</span>` +
         `</div>`;
     }
+
+    h += "<h3 style='margin-top:16px'>使用モデル</h3>";
+    h += `<div class="setup-item">${esc(MODEL_LABELS[request.execution?.model] || MODEL_LABELS[DEFAULT_MODEL])}</div>`;
 
     h += "<h3 style='margin-top:16px'>テーマ / 文章スタイル</h3>";
     const themeLabels = (request.theme?.themes || []).map(x => THEME_LABELS[x] || x);
@@ -1388,11 +1456,17 @@
     }
 
     const inputType = sessionHasUser() ? "user" : "gm";
+    const nextModel = continuationModel.value || DEFAULT_MODEL;
+    activeSessionRequest.execution = {
+      ...(activeSessionRequest.execution || {}),
+      model: nextModel
+    };
+    setSelectedModel(nextModel);
 
     setBusy(
       continueBtn,
       true,
-      "続きをシミュレーション中…",
+      `${MODEL_LABELS[nextModel] || "選択モデル"}でシミュレーション中…`,
       "続きを生成"
     );
     buildBtn.disabled = true;
@@ -1467,7 +1541,7 @@
       setBusy(
         continueBtn,
         false,
-        "続きをシミュレーション中…",
+        `${MODEL_LABELS[nextModel] || "選択モデル"}でシミュレーション中…`,
         "続きを生成"
       );
       buildBtn.disabled = false;
@@ -1591,8 +1665,9 @@
       return;
     }
 
+    const runModel = r.request.execution?.model || DEFAULT_MODEL;
     buildBtn.disabled = true;
-    buildBtn.textContent = "Opusでシミュレーション中…";
+    buildBtn.textContent = `${MODEL_LABELS[runModel] || "選択モデル"}でシミュレーション中…`;
 
     try{
       const data = await api("/api/start", {
@@ -1607,6 +1682,7 @@
 
       // Freeze the session facts at simulation start.
       activeSessionRequest = JSON.parse(JSON.stringify(r.request));
+      continuationModel.value = activeSessionRequest.execution?.model || DEFAULT_MODEL;
       activeLogSessionId = data.log_session_id || null;
       activeBranchMeta = null;
       activeDisplay = JSON.parse(JSON.stringify(r.display));
@@ -1661,6 +1737,21 @@
   });
 
   document.getElementById("fullRandom").addEventListener("click", () => run(true));
+
+  document.querySelectorAll('input[name="orbitModel"]').forEach(radio => {
+    radio.addEventListener("change", () => {
+      continuationModel.value = selectedModel();
+    });
+  });
+  continuationModel.addEventListener("change", () => {
+    setSelectedModel(continuationModel.value);
+    if(activeSessionRequest){
+      activeSessionRequest.execution = {
+        ...(activeSessionRequest.execution || {}),
+        model: continuationModel.value
+      };
+    }
+  });
 
   buildBtn.addEventListener("click", () => run(false));
   continueBtn.addEventListener("click", () =>
