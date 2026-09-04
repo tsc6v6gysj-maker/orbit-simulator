@@ -131,7 +131,7 @@
 <body>
 <section id="authGate" class="auth-shell">
   <div class="auth-card">
-    <h1>ORBIT <span class="badge">v0.12.0-session-home</span></h1>
+    <h1>ORBIT <span class="badge">v0.12.1-session-home</span></h1>
     <p class="muted">ログインしてシミュレーションを始めます。</p>
     <form id="loginForm">
       <label>メールアドレス
@@ -148,7 +148,7 @@
 <main id="app" class="hidden">
   <div class="topbar">
     <div>
-      <h1>ORBIT <span class="badge">v0.12.0-session-home</span></h1>
+      <h1>ORBIT <span class="badge">v0.12.1-session-home</span></h1>
       <p class="muted" style="margin-bottom:0">人物を選んで、状況を置く。あとは彼らにおまかせ。</p>
     </div>
     <button class="secondary logout" id="logoutBtn">ログアウト</button>
@@ -169,14 +169,6 @@
       <button class="secondary history-toggle" id="historyToggle" type="button">☰ 履歴</button>
 
       <section class="card session-home" id="sessionHome">
-        <h2>開始状況</h2>
-        <p class="muted">どんなところから始めるかを書きます。短くても大丈夫です。</p>
-        <textarea id="situation" rows="5" placeholder="例：参加者たちは夕方の市場で偶然居合わせた。"></textarea>
-        <details>
-          <summary>GMの指示（任意）</summary>
-          <textarea id="gm" rows="3" style="margin-top:10px" placeholder="この場面で起きることや、決めておきたい条件があれば書いてください。"></textarea>
-        </details>
-
         <div class="session-summary">
           <span class="summary-chip" id="summaryParticipants">参加者：未選択</span>
           <span class="summary-chip" id="summaryRelationship">関係：既定</span>
@@ -222,6 +214,14 @@
           </div>
         </details>
 
+        <h2 style="margin-top:18px">開始状況</h2>
+        <p class="muted">どんなところから始めるかを書きます。短くても大丈夫です。</p>
+        <textarea id="situation" rows="5" placeholder="例：参加者たちは夕方の市場で偶然居合わせた。"></textarea>
+        <details>
+          <summary>GMの指示（任意）</summary>
+          <textarea id="gm" rows="3" style="margin-top:10px" placeholder="この場面で起きることや、決めておきたい条件があれば書いてください。"></textarea>
+        </details>
+
         <div class="actions">
           <button class="secondary" id="randomSituation">🎲 開始状況だけランダム</button>
           <button class="secondary" id="fullRandom">🎲 今回の設定をランダム</button>
@@ -243,6 +243,11 @@
     <details>
       <summary>開発者向け：Session Requestを見る</summary>
       <pre id="json"></pre>
+    </details>
+
+    <details class="hidden" id="promptDebugWrap">
+      <summary>開発者向け：モデルへ送信した内容を見る</summary>
+      <pre id="promptDebug"></pre>
     </details>
 
     <div id="simulationWrap" class="hidden" style="margin-top:18px">
@@ -340,6 +345,8 @@
   const pretty = document.getElementById("pretty");
   const json = document.getElementById("json");
   const resolverEl = document.getElementById("resolver");
+  const promptDebugWrap = document.getElementById("promptDebugWrap");
+  const promptDebugEl = document.getElementById("promptDebug");
   const situation = document.getElementById("situation");
   const gm = document.getElementById("gm");
   const errorEl = document.getElementById("error");
@@ -1344,6 +1351,24 @@
     return lines.join("\n");
   }
 
+  function showPromptDebug(promptDebug){
+    if(!promptDebug?.static_prefix && !promptDebug?.dynamic_suffix){
+      promptDebugEl.textContent = "";
+      promptDebugWrap.classList.add("hidden");
+      return;
+    }
+    promptDebugEl.textContent = [
+      "=== SYSTEM / STATIC PREFIX ===",
+      promptDebug.static_prefix || "(empty)",
+      "",
+      "=== USER / DYNAMIC SUFFIX ===",
+      "Apply the following current-session facts and render the next simulated character beat.",
+      "",
+      promptDebug.dynamic_suffix || "(empty)"
+    ].join("\n");
+    promptDebugWrap.classList.remove("hidden");
+  }
+
   function show(data, display, request){
     let h = "<h3>Participants</h3>";
     h +=
@@ -1529,6 +1554,7 @@
         })
       });
 
+      showPromptDebug(data.prompt_debug);
       const text = data.text || "(出力なし)";
       if(data.log_session_id){
         activeLogSessionId = data.log_session_id;
@@ -1682,6 +1708,7 @@
 
     simulationText.textContent = "";
     usageEl.textContent = "";
+    showPromptDebug(null);
     bottomStartingConditions.value = "";
     continuationGm.value = "";
     simulationWrap.classList.add("hidden");
@@ -1722,6 +1749,7 @@
       });
 
       show(data.resolved, r.display, r.request);
+      showPromptDebug(data.prompt_debug);
 
       // Freeze the session facts at simulation start.
       activeSessionRequest = JSON.parse(JSON.stringify(r.request));
