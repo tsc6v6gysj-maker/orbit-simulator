@@ -23,15 +23,18 @@
   .history-sidebar{position:sticky;top:14px;max-height:calc(100vh - 28px);overflow:auto}
   .history-sidebar .card{margin-top:0}
   .main-column{min-width:0}
-  .setup-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
-  .setup-tab{background:var(--soft);color:var(--muted);padding:9px 13px}
-  .setup-tab.active{background:var(--accent);color:var(--accentText)}
-  .setup-panel{display:none}
-  .setup-panel.active{display:block}
-  .setup-panel .card:first-child{margin-top:14px}
-  .session-setup{margin-top:0}
-  .setup-footer{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
+  .session-home{margin-top:0}
+  .session-summary{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .summary-chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;padding:6px 10px;font-size:12px;color:var(--muted);background:var(--soft)}
+  .advanced-settings{margin-top:14px}
+  .advanced-settings > summary{display:inline-flex;align-items:center;gap:6px;padding:9px 12px;border-radius:10px;background:var(--soft);color:var(--text);font-weight:700}
+  .advanced-grid{display:grid;gap:14px;margin-top:12px}
+  .advanced-section{border-top:1px solid var(--line);padding-top:14px}
+  .advanced-section:first-child{border-top:0;padding-top:4px}
+  .advanced-section h3{font-size:15px;margin:0 0 6px}
   .history-toggle{display:none}
+  .new-session-sidebar{width:100%;margin:10px 0 14px}
+  .history-divider{height:1px;background:var(--line);margin:2px 0 12px}
   h1{font-size:26px;margin:0 0 6px}
   h2{font-size:17px;margin:0}
   p{line-height:1.6}
@@ -122,13 +125,13 @@
     .history-sidebar.open{display:block}
     .main-column{width:100%}
   }
-  @media(max-width:700px){.row{grid-template-columns:1fr}.model-grid{grid-template-columns:1fr}.saved-session-head{flex-direction:column}.saved-session button{width:100%}.setup-tabs{display:grid;grid-template-columns:repeat(2,1fr)}.setup-tab{width:100%}}
+  @media(max-width:700px){.row{grid-template-columns:1fr}.model-grid{grid-template-columns:1fr}.saved-session-head{flex-direction:column}.saved-session button{width:100%}}
 </style>
 </head>
 <body>
 <section id="authGate" class="auth-shell">
   <div class="auth-card">
-    <h1>ORBIT <span class="badge">v0.11.0-layout</span></h1>
+    <h1>ORBIT <span class="badge">v0.12.0-session-home</span></h1>
     <p class="muted">ログインしてシミュレーションを始めます。</p>
     <form id="loginForm">
       <label>メールアドレス
@@ -145,7 +148,7 @@
 <main id="app" class="hidden">
   <div class="topbar">
     <div>
-      <h1>ORBIT <span class="badge">v0.11.0-layout</span></h1>
+      <h1>ORBIT <span class="badge">v0.12.0-session-home</span></h1>
       <p class="muted" style="margin-bottom:0">人物を選んで、状況を置く。あとは彼らにおまかせ。</p>
     </div>
     <button class="secondary logout" id="logoutBtn">ログアウト</button>
@@ -155,122 +158,77 @@
     <aside class="history-sidebar" id="historySidebar">
       <section class="card" id="savedSessionsCard">
         <h2>履歴</h2>
+        <button class="primary new-session-sidebar" id="sidebarNewSessionBtn" type="button">＋ 新しいシミュレーション</button>
+        <div class="history-divider"></div>
         <p class="muted">保存したセッションをここから再開できます。内容は暗号化されたまま保存されています。</p>
-        <div id="savedSessions" class="saved-session-list">
-          <div class="hint">保存済みセッションを読み込み中…</div>
-        </div>
+        <div id="savedSessions" class="saved-session-list"><div class="hint">保存済みセッションを読み込み中…</div></div>
       </section>
     </aside>
 
     <div class="main-column">
       <button class="secondary history-toggle" id="historyToggle" type="button">☰ 履歴</button>
 
-      <section class="card session-setup">
-        <h2>今回のセッション</h2>
-        <p class="muted">参加者や関係、開始状況などを設定します。項目ごとに切り替えられます。</p>
-        <div class="setup-tabs" role="tablist" aria-label="セッション設定">
-          <button class="setup-tab active" type="button" data-setup-tab="participants">参加者</button>
-          <button class="setup-tab" type="button" data-setup-tab="relationship">関係</button>
-          <button class="setup-tab" type="button" data-setup-tab="situation">開始状況</button>
-          <button class="setup-tab" type="button" data-setup-tab="rendering">表示設定</button>
+      <section class="card session-home" id="sessionHome">
+        <h2>開始状況</h2>
+        <p class="muted">どんなところから始めるかを書きます。短くても大丈夫です。</p>
+        <textarea id="situation" rows="5" placeholder="例：参加者たちは夕方の市場で偶然居合わせた。"></textarea>
+        <details>
+          <summary>GMの指示（任意）</summary>
+          <textarea id="gm" rows="3" style="margin-top:10px" placeholder="この場面で起きることや、決めておきたい条件があれば書いてください。"></textarea>
+        </details>
+
+        <div class="session-summary">
+          <span class="summary-chip" id="summaryParticipants">参加者：未選択</span>
+          <span class="summary-chip" id="summaryRelationship">関係：既定</span>
+          <span class="summary-chip" id="summaryModel">モデル：GPT-5.6 Sol</span>
+          <span class="summary-chip" id="summaryTheme">テーマ：指定なし</span>
         </div>
-      </section>
 
-      <div class="setup-panel active" data-setup-panel="participants">
-        <section class="card">
-          <h2>登場人物</h2>
-          <p class="muted">この場面に登場する人物を選びます。</p>
-          <div class="grid" id="characters">
-            <div class="hint">人物を読み込み中…</div>
+        <details class="advanced-settings" id="advancedSettings">
+          <summary>設定を変更</summary>
+          <div class="advanced-grid">
+            <div class="advanced-section">
+              <h3>参加者</h3>
+              <p class="muted">この場面に登場する人物を選びます。</p>
+              <div class="grid" id="characters"><div class="hint">人物を読み込み中…</div></div>
+            </div>
+            <div class="advanced-section">
+              <h3>今回の関係</h3>
+              <p class="muted">人物どうしの関係を今回だけ指定したいときに選びます。指定しなければ、もともとの関係をそのまま使います。</p>
+              <div id="pairs"><div class="hint">2人以上選ぶと、人物どうしの関係を指定できます。</div></div>
+            </div>
+            <div class="advanced-section">
+              <h3>使用モデル</h3>
+              <p class="muted">生成モデルを選びます。人物・関係性・現在状態などの設定は変わりません。</p>
+              <div class="model-grid" id="modelChoices">
+                <label class="model-option"><input type="radio" name="orbitModel" value="openai/gpt-5.6-sol" checked><div class="model-head"><span>GPT-5.6 Sol</span><span class="model-tag">おすすめ</span></div><div class="model-copy">高速・低コスト・高品質。通常のシミュレーションや試行錯誤におすすめ。</div></label>
+                <label class="model-option"><input type="radio" name="orbitModel" value="anthropic/claude-opus-5"><div class="model-head"><span>Claude Opus 5</span><span class="model-tag">品質優先</span></div><div class="model-copy">より時間とコストはかかりますが、複雑な人物再現を最優先したいときに。</div></label>
+              </div>
+            </div>
+            <div class="advanced-section">
+              <h3>テーマ</h3>
+              <p class="muted">今回の世界・事件の傾向を指定します。人物の性格・判断・口調は変えません。最大2つまで選べます。</p>
+              <div class="theme-grid" id="themeChoices">
+                <label class="theme-chip"><input type="checkbox" value="daily"><span>日常</span></label><label class="theme-chip"><input type="checkbox" value="romance"><span>ロマンス</span></label><label class="theme-chip"><input type="checkbox" value="comedy"><span>コメディ</span></label><label class="theme-chip"><input type="checkbox" value="mystery"><span>ミステリー</span></label><label class="theme-chip"><input type="checkbox" value="horror"><span>ホラー</span></label><label class="theme-chip"><input type="checkbox" value="action"><span>アクション</span></label><label class="theme-chip"><input type="checkbox" value="fantasy"><span>ファンタジー</span></label><label class="theme-chip"><input type="checkbox" value="suspense"><span>サスペンス</span></label>
+              </div>
+              <div class="theme-note">指定なしでも通常どおり動作します。</div>
+              <label style="display:block;margin-top:14px"><span>自由指定（任意）</span><input id="themeCustom" type="text" placeholder="例：閉鎖された共同体を舞台にした不穏なホラー"></label>
+            </div>
+            <div class="advanced-section">
+              <h3>文章スタイル</h3>
+              <p class="muted">発生した出来事の文章上の見せ方だけを変更します。人物・出来事・結末は変えません。</p>
+              <select id="writingStyle"><option value="standard">標準</option><option value="romance_psychology">恋愛心理小説</option><option value="hardboiled">ハードボイルド</option><option value="nocturne">夜想文学</option><option value="warm_youth">温かな青春物語</option><option value="action">アクション</option><option value="classic_fantasy">王道ファンタジー</option><option value="light_novel">ライトノベル</option><option value="psychological_horror">心理ホラー</option></select>
+            </div>
           </div>
-        </section>
-      </div>
+        </details>
 
-      <div class="setup-panel" data-setup-panel="relationship">
-        <section class="card">
-          <h2>今回の関係</h2>
-          <p class="muted">人物どうしの関係を今回だけ指定したいときに選びます。指定しなければ、もともとの関係をそのまま使います。</p>
-          <div id="pairs"><div class="hint">2人以上選ぶと、人物どうしの関係を指定できます。</div></div>
-        </section>
-      </div>
-
-      <div class="setup-panel" data-setup-panel="situation">
-        <section class="card">
-          <h2>開始状況</h2>
-          <p class="muted">どんなところから始めるかを書きます。短くても大丈夫です。</p>
-          <textarea id="situation" rows="4" placeholder="例：参加者たちは夕方の市場で偶然居合わせた。"></textarea>
-
-          <details>
-            <summary>GMの指示（任意）</summary>
-            <textarea id="gm" rows="3" style="margin-top:10px" placeholder="この場面で起きることや、決めておきたい条件があれば書いてください。"></textarea>
-          </details>
-
-          <div class="actions">
-            <button class="secondary" id="randomSituation">🎲 開始状況だけランダム</button>
-            <button class="secondary" id="fullRandom">🎲 今回の設定をランダム</button>
-          </div>
-        </section>
-      </div>
-
-      <div class="setup-panel" data-setup-panel="rendering">
-        <section class="card">
-          <h2>使用モデル</h2>
-          <p class="muted">シミュレーションに使う生成モデルを選びます。人物・関係性・現在状態などの設定は変わりません。</p>
-          <div class="model-grid" id="modelChoices">
-            <label class="model-option">
-              <input type="radio" name="orbitModel" value="openai/gpt-5.6-sol" checked>
-              <div class="model-head"><span>GPT-5.6 Sol</span><span class="model-tag">おすすめ</span></div>
-              <div class="model-copy">高速・低コスト・高品質。通常のシミュレーションや試行錯誤におすすめ。</div>
-            </label>
-            <label class="model-option">
-              <input type="radio" name="orbitModel" value="anthropic/claude-opus-5">
-              <div class="model-head"><span>Claude Opus 5</span><span class="model-tag">品質優先</span></div>
-              <div class="model-copy">より時間とコストはかかりますが、複雑な人物再現を最優先したいときに。</div>
-            </label>
-          </div>
-        </section>
-
-        <section class="card">
-          <h2>テーマ</h2>
-          <p class="muted">今回の世界・事件の傾向を指定します。人物の性格・判断・口調は変えません。最大2つまで選べます。</p>
-          <div class="theme-grid" id="themeChoices">
-            <label class="theme-chip"><input type="checkbox" value="daily"><span>日常</span></label>
-            <label class="theme-chip"><input type="checkbox" value="romance"><span>ロマンス</span></label>
-            <label class="theme-chip"><input type="checkbox" value="comedy"><span>コメディ</span></label>
-            <label class="theme-chip"><input type="checkbox" value="mystery"><span>ミステリー</span></label>
-            <label class="theme-chip"><input type="checkbox" value="horror"><span>ホラー</span></label>
-            <label class="theme-chip"><input type="checkbox" value="action"><span>アクション</span></label>
-            <label class="theme-chip"><input type="checkbox" value="fantasy"><span>ファンタジー</span></label>
-            <label class="theme-chip"><input type="checkbox" value="suspense"><span>サスペンス</span></label>
-          </div>
-          <div class="theme-note">指定なしでも通常どおり動作します。</div>
-          <label style="display:block;margin-top:14px">
-            <span>自由指定（任意）</span>
-            <input id="themeCustom" type="text" placeholder="例：閉鎖された共同体を舞台にした不穏なホラー">
-          </label>
-        </section>
-
-        <section class="card">
-          <h2>文章スタイル</h2>
-          <p class="muted">発生した出来事の文章上の見せ方だけを変更します。人物・出来事・結末は変えません。</p>
-          <select id="writingStyle">
-            <option value="standard">標準</option>
-            <option value="romance_psychology">恋愛心理小説</option>
-            <option value="hardboiled">ハードボイルド</option>
-            <option value="nocturne">夜想文学</option>
-            <option value="warm_youth">温かな青春物語</option>
-            <option value="action">アクション</option>
-            <option value="classic_fantasy">王道ファンタジー</option>
-            <option value="light_novel">ライトノベル</option>
-            <option value="psychological_horror">心理ホラー</option>
-          </select>
-        </section>
-      </div>
-
-      <div class="setup-footer">
+        <div class="actions">
+          <button class="secondary" id="randomSituation">🎲 開始状況だけランダム</button>
+          <button class="secondary" id="fullRandom">🎲 今回の設定をランダム</button>
+          <button class="primary" id="build">シミュレーションを開始</button>
+        </div>
         <div id="error" class="error hidden"></div>
-        <button class="primary" id="build">シミュレーションを開始</button>
-      </div>
+      </section>
 
   <section class="card hidden" id="result">
     <h2>今回の設定</h2>
@@ -684,21 +642,39 @@
   const continuationModel = document.getElementById("continuationModel");
   const historyToggle = document.getElementById("historyToggle");
   const historySidebar = document.getElementById("historySidebar");
+  const sidebarNewSessionBtn = document.getElementById("sidebarNewSessionBtn");
+  const sessionHome = document.getElementById("sessionHome");
 
-  document.querySelectorAll("[data-setup-tab]").forEach(tab => {
-    tab.addEventListener("click", () => {
-      const target = tab.dataset.setupTab;
-      document.querySelectorAll("[data-setup-tab]").forEach(x => x.classList.toggle("active", x === tab));
-      document.querySelectorAll("[data-setup-panel]").forEach(panel => {
-        panel.classList.toggle("active", panel.dataset.setupPanel === target);
-      });
-    });
-  });
+  function updateSessionSummary(){
+    const selectedCount = document.querySelectorAll('#characters input[type="checkbox"]:checked').length;
+    document.getElementById("summaryParticipants").textContent = selectedCount ? `参加者：${selectedCount}人` : "参加者：未選択";
+    const changed = [...document.querySelectorAll("#pairs select")].filter(x => x.value && x.value !== "auto").length;
+    document.getElementById("summaryRelationship").textContent = changed ? `関係：${changed}件変更` : "関係：既定";
+    document.getElementById("summaryModel").textContent = `モデル：${MODEL_LABELS[selectedModel()] || MODEL_LABELS[DEFAULT_MODEL]}`;
+    const themes = [...document.querySelectorAll('#themeChoices input[type="checkbox"]:checked')].map(x => x.nextElementSibling?.textContent?.trim()).filter(Boolean);
+    const custom = document.getElementById("themeCustom")?.value?.trim();
+    document.getElementById("summaryTheme").textContent = themes.length || custom ? `テーマ：${[...themes, ...(custom ? [custom] : [])].join(" / ")}` : "テーマ：指定なし";
+  }
 
   historyToggle?.addEventListener("click", () => {
     const open = historySidebar.classList.toggle("open");
     historyToggle.textContent = open ? "✕ 履歴を閉じる" : "☰ 履歴";
   });
+
+  sidebarNewSessionBtn?.addEventListener("click", () => {
+    document.getElementById("newSessionBtn")?.click();
+    if(window.matchMedia("(max-width: 900px)").matches){
+      historySidebar.classList.remove("open");
+      historyToggle.textContent = "☰ 履歴";
+    }
+    sessionHome?.scrollIntoView({behavior:"smooth", block:"start"});
+    document.getElementById("situation")?.focus();
+  });
+
+  document.addEventListener("change", event => {
+    if(event.target.closest("#characters, #pairs, #modelChoices, #themeChoices")) updateSessionSummary();
+  });
+  document.getElementById("themeCustom")?.addEventListener("input", updateSessionSummary);
 
   function selectedThemes(){
     return [...themeChoices.querySelectorAll("input[type=checkbox]:checked")]
@@ -1804,6 +1780,8 @@
   });
 
   document.getElementById("fullRandom").addEventListener("click", () => run(true));
+
+  setTimeout(updateSessionSummary, 0);
 
   document.querySelectorAll('input[name="orbitModel"]').forEach(radio => {
     radio.addEventListener("change", () => {
