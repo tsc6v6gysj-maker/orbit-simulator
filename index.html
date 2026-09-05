@@ -134,6 +134,16 @@
   .admin-user-actions{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:13px;flex-wrap:wrap}
   .admin-save-status{font-size:12px;color:var(--muted)}
   .admin-save-status.error-text{color:var(--error)}
+
+  .admin-character-panel{margin-top:14px}
+  .admin-character-form{display:grid;gap:14px;margin-top:14px}
+  .admin-character-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .admin-character-form textarea{min-height:300px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:1.5}
+  .admin-character-package-head{display:flex;justify-content:space-between;gap:10px;align-items:end;flex-wrap:wrap}
+  .admin-character-package-head input[type="file"]{max-width:100%;font-size:13px}
+  .admin-character-actions{display:flex;justify-content:flex-end;align-items:center;gap:10px;flex-wrap:wrap}
+  .admin-character-status{font-size:12px;color:var(--muted);white-space:pre-wrap}
+  .admin-character-status.error-text{color:var(--error)}
   @media(max-width:900px){
     main{max-width:880px}
     .history-toggle{display:inline-flex;margin-bottom:10px}
@@ -142,7 +152,7 @@
     .history-sidebar.open{display:block}
     .main-column{width:100%}
   }
-  @media(max-width:700px){.row{grid-template-columns:1fr}.model-grid{grid-template-columns:1fr}.saved-session-head{flex-direction:column}.saved-session button{width:100%}.admin-user-grid{grid-template-columns:1fr}.admin-user-head{flex-direction:column}.topbar{align-items:flex-start}}
+  @media(max-width:700px){.row{grid-template-columns:1fr}.model-grid{grid-template-columns:1fr}.saved-session-head{flex-direction:column}.saved-session button{width:100%}.admin-user-grid{grid-template-columns:1fr}.admin-user-head{flex-direction:column}.admin-character-grid{grid-template-columns:1fr}.topbar{align-items:flex-start}}
 </style>
 </head>
 <body>
@@ -170,6 +180,7 @@
     </div>
     <div class="topbar-actions">
       <button class="secondary logout admin-only" id="adminUsersBtn" type="button">ユーザー管理</button>
+      <button class="secondary logout admin-only" id="adminCharactersBtn" type="button">Character追加</button>
       <button class="secondary logout" id="logoutBtn">ログアウト</button>
     </div>
   </div>
@@ -184,6 +195,46 @@
     </div>
     <div id="adminUsersStatus" class="hint" style="margin-top:12px">「ユーザー管理」を開くと一覧を読み込みます。</div>
     <div id="adminUsersList" class="admin-users-list"></div>
+  </section>
+
+
+
+  <section class="card admin-only hidden admin-character-panel" id="adminCharactersPanel">
+    <div class="admin-users-head">
+      <div>
+        <h2>Character追加</h2>
+        <p class="muted" style="margin:6px 0 0">Character Labで作成したPackageをorbit-runtimeへ登録します。登録直後は管理者だけが利用でき、テスターへの公開は「ユーザー管理」で設定します。</p>
+      </div>
+      <button class="secondary" id="adminCharactersCloseBtn" type="button">閉じる</button>
+    </div>
+    <form id="adminCharacterForm" class="admin-character-form">
+      <div class="admin-character-grid">
+        <label>表示名
+          <input id="adminCharacterDisplayName" type="text" maxlength="100" placeholder="例：ファイノン" required>
+        </label>
+        <label>Character ID
+          <input id="adminCharacterId" type="text" maxlength="64" placeholder="例：phainon" pattern="[a-z0-9][a-z0-9_-]{0,63}" required>
+          <span class="muted" style="margin-top:5px">英小文字・数字・ハイフン・アンダースコア。登録後の内部IDになります。</span>
+        </label>
+        <label>別名（任意）
+          <input id="adminCharacterAliases" type="text" placeholder="カンマ区切り">
+        </label>
+        <label>Version（任意）
+          <input id="adminCharacterVersion" type="text" maxlength="40" placeholder="例：1.0">
+        </label>
+      </div>
+      <div>
+        <div class="admin-character-package-head">
+          <label style="margin:0;flex:1">Character Package</label>
+          <input id="adminCharacterFile" type="file" accept=".txt,text/plain">
+        </div>
+        <textarea id="adminCharacterPackage" placeholder="Character Labの出力をここへ貼り付けるか、txtファイルを選択してください。" required></textarea>
+      </div>
+      <div class="admin-character-actions">
+        <span id="adminCharacterStatus" class="admin-character-status"></span>
+        <button class="primary" id="adminCharacterSaveBtn" type="submit">Characterを登録</button>
+      </div>
+    </form>
   </section>
 
   <div class="app-layout">
@@ -420,6 +471,18 @@
   const adminUsersCloseBtn = document.getElementById("adminUsersCloseBtn");
   const adminUsersStatus = document.getElementById("adminUsersStatus");
   const adminUsersList = document.getElementById("adminUsersList");
+  const adminCharactersBtn = document.getElementById("adminCharactersBtn");
+  const adminCharactersPanel = document.getElementById("adminCharactersPanel");
+  const adminCharactersCloseBtn = document.getElementById("adminCharactersCloseBtn");
+  const adminCharacterForm = document.getElementById("adminCharacterForm");
+  const adminCharacterDisplayName = document.getElementById("adminCharacterDisplayName");
+  const adminCharacterId = document.getElementById("adminCharacterId");
+  const adminCharacterAliases = document.getElementById("adminCharacterAliases");
+  const adminCharacterVersion = document.getElementById("adminCharacterVersion");
+  const adminCharacterFile = document.getElementById("adminCharacterFile");
+  const adminCharacterPackage = document.getElementById("adminCharacterPackage");
+  const adminCharacterStatus = document.getElementById("adminCharacterStatus");
+  const adminCharacterSaveBtn = document.getElementById("adminCharacterSaveBtn");
 
   let activeSessionRequest = null;
   let activeLogSessionId = null;
@@ -690,6 +753,7 @@
     if(!isAdmin()){
       showPromptDebug(null);
       adminUsersPanel?.classList.add("hidden");
+      adminCharactersPanel?.classList.add("hidden");
     }
   }
 
@@ -967,6 +1031,7 @@ ${error.message}`;
     const opening = adminUsersPanel.classList.contains("hidden");
     adminUsersPanel.classList.toggle("hidden", !opening);
     if(opening){
+      adminCharactersPanel?.classList.add("hidden");
       await loadAdminUsers();
       adminUsersPanel.scrollIntoView({behavior:"smooth", block:"start"});
     }
@@ -975,6 +1040,72 @@ ${error.message}`;
   adminUsersCloseBtn?.addEventListener("click", () => {
     adminUsersPanel.classList.add("hidden");
     adminUsersBtn?.scrollIntoView({behavior:"smooth", block:"nearest"});
+  });
+
+  function resetAdminCharacterForm(){
+    adminCharacterForm?.reset();
+    if(adminCharacterStatus){
+      adminCharacterStatus.textContent = "";
+      adminCharacterStatus.classList.remove("error-text");
+    }
+  }
+
+  adminCharacterFile?.addEventListener("change", async () => {
+    const file = adminCharacterFile.files?.[0];
+    if(!file) return;
+    try{
+      adminCharacterPackage.value = await file.text();
+      adminCharacterStatus.textContent = `読み込みました：${file.name}`;
+      adminCharacterStatus.classList.remove("error-text");
+    }catch(error){
+      adminCharacterStatus.textContent = `ファイルを読み込めませんでした：${error.message}`;
+      adminCharacterStatus.classList.add("error-text");
+    }
+  });
+
+  adminCharactersBtn?.addEventListener("click", () => {
+    if(!isAdmin()) return;
+    const opening = adminCharactersPanel.classList.contains("hidden");
+    adminCharactersPanel.classList.toggle("hidden", !opening);
+    if(opening){
+      adminUsersPanel?.classList.add("hidden");
+      adminCharactersPanel.scrollIntoView({behavior:"smooth", block:"start"});
+    }
+  });
+
+  adminCharactersCloseBtn?.addEventListener("click", () => {
+    adminCharactersPanel.classList.add("hidden");
+    adminCharactersBtn?.scrollIntoView({behavior:"smooth", block:"nearest"});
+  });
+
+  adminCharacterForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if(!isAdmin()) return;
+    const id = (adminCharacterId.value || "").trim().toLowerCase();
+    const displayName = (adminCharacterDisplayName.value || "").trim();
+    const aliases = (adminCharacterAliases.value || "").split(/[,、]/).map(x => x.trim()).filter(Boolean);
+    const version = (adminCharacterVersion.value || "").trim();
+    const packageText = adminCharacterPackage.value || "";
+
+    adminCharacterSaveBtn.disabled = true;
+    adminCharacterStatus.classList.remove("error-text");
+    adminCharacterStatus.textContent = "GitHubへ登録中…";
+    try{
+      const data = await api("/api/admin/characters/create", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({id, display_name:displayName, aliases, version, package_text:packageText})
+      });
+      adminCharacterStatus.textContent = `登録しました：${data.character?.display_name || displayName} (${data.character?.id || id})\nテスターへ公開する場合は「ユーザー管理」でONにしてください。`;
+      await loadCatalog();
+      if(!adminUsersPanel?.classList.contains("hidden")) await loadAdminUsers();
+      adminCharacterForm.reset();
+    }catch(error){
+      adminCharacterStatus.textContent = `登録に失敗しました：${error.message}`;
+      adminCharacterStatus.classList.add("error-text");
+    }finally{
+      adminCharacterSaveBtn.disabled = false;
+    }
   });
 
   async function loadCatalog(){
