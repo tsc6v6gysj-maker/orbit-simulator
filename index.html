@@ -79,6 +79,7 @@
   summary{cursor:pointer;color:var(--muted);font-size:14px}
   pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-radius:12px;padding:14px;overflow:auto;font-size:12px;line-height:1.5}
   .hidden{display:none}
+  .admin-only:not(.admin-visible){display:none}
   .hint{padding:12px;background:var(--soft);border-radius:12px;color:var(--muted);font-size:14px}
   .error{color:var(--error);font-size:14px;margin-top:12px;white-space:pre-wrap}
   .simulation-beat{white-space:pre-wrap;line-height:1.8;padding:16px 0;border-top:1px solid var(--line)}
@@ -119,7 +120,7 @@
   .saved-branch-label{display:inline-block;margin-bottom:5px;padding:2px 7px;border-radius:999px;background:var(--soft);font-size:11px;color:var(--muted)}
   @media(max-width:900px){
     main{max-width:880px}
-    .history-toggle{display:inline-flex}
+    .history-toggle{display:inline-flex;margin-bottom:10px}
     .app-layout{display:block;margin-top:10px}
     .history-sidebar{display:none;position:static;max-height:none;margin-bottom:14px}
     .history-sidebar.open{display:block}
@@ -155,6 +156,7 @@
   </div>
 
   <div class="app-layout">
+    <button class="secondary history-toggle" id="historyToggle" type="button">☰ 履歴</button>
     <aside class="history-sidebar" id="historySidebar">
       <section class="card" id="savedSessionsCard">
         <h2>履歴</h2>
@@ -166,8 +168,6 @@
     </aside>
 
     <div class="main-column">
-      <button class="secondary history-toggle" id="historyToggle" type="button">☰ 履歴</button>
-
       <section class="card session-home" id="sessionHome">
         <div class="session-summary">
           <span class="summary-chip" id="summaryParticipants">参加者：未選択</span>
@@ -197,7 +197,7 @@
                 <label class="model-option"><input type="radio" name="orbitModel" value="anthropic/claude-opus-5"><div class="model-head"><span>Claude Opus 5</span><span class="model-tag">品質優先</span></div><div class="model-copy">より時間とコストはかかりますが、複雑な人物再現を最優先したいときに。</div></label>
               </div>
             </div>
-            <div class="advanced-section">
+            <div class="advanced-section admin-only" id="adminDebugSection">
               <h3>管理者用デバッグ</h3>
               <p class="muted">選択中モデルのAPI疎通と、現在の設定でORBITプロンプトのどの層から問題が起きるかを確認します。</p>
               <div class="actions" style="margin-top:8px">
@@ -245,18 +245,18 @@
     <p class="muted">今回の人物・関係・開始状況です。</p>
     <div id="pretty" class="setup"></div>
 
-    <details>
-      <summary>開発者向け：Resolverを見る</summary>
+    <details class="admin-only">
+      <summary>管理者向け：Resolverを見る</summary>
       <pre id="resolver"></pre>
     </details>
 
-    <details>
-      <summary>開発者向け：Session Requestを見る</summary>
+    <details class="admin-only">
+      <summary>管理者向け：Session Requestを見る</summary>
       <pre id="json"></pre>
     </details>
 
-    <details class="hidden" id="promptDebugWrap">
-      <summary>開発者向け：モデルへ送信した内容を見る</summary>
+    <details class="admin-only hidden" id="promptDebugWrap">
+      <summary>管理者向け：モデルへ送信した内容を見る</summary>
       <div style="display:flex;justify-content:flex-end;margin:10px 0 8px">
         <button type="button" class="secondary" id="copyPromptDebug" style="padding:8px 12px;font-size:13px">全文をコピー</button>
       </div>
@@ -308,8 +308,8 @@
         </div>
       </div>
 
-      <details>
-        <summary>開発者向け：直近のUsageを見る</summary>
+      <details class="admin-only">
+        <summary>管理者向け：直近のUsageを見る</summary>
         <pre id="usage"></pre>
       </details>
     </div>
@@ -394,6 +394,7 @@
   let activeSharedRevision = -1;
   let activeBranchMeta = null;
   let savedSessionCatalog = [];
+  let currentUserRole = null;
   const logKeyCache = new Map();
   const LOG_ENCRYPTION_VERSION = "aes-gcm-v1";
 
@@ -642,6 +643,17 @@
     return document.querySelector('input[name="orbitModel"]:checked')?.value || DEFAULT_MODEL;
   }
 
+  function isAdmin(){
+    return currentUserRole === "admin";
+  }
+
+  function applyAdminVisibility(){
+    document.querySelectorAll(".admin-only").forEach(el => {
+      el.classList.toggle("admin-visible", isAdmin());
+    });
+    if(!isAdmin()) showPromptDebug(null);
+  }
+
   function setSelectedModel(model){
     const value = MODEL_LABELS[model] ? model : DEFAULT_MODEL;
     const radio = document.querySelector(`input[name="orbitModel"][value="${value}"]`);
@@ -669,6 +681,7 @@
   const historySidebar = document.getElementById("historySidebar");
   const sidebarNewSessionBtn = document.getElementById("sidebarNewSessionBtn");
   const sessionHome = document.getElementById("sessionHome");
+  const advancedSettings = document.getElementById("advancedSettings");
 
   function updateSessionSummary(){
     const selectedCount = document.querySelectorAll('#characters input[type="checkbox"]:checked').length;
@@ -776,6 +789,8 @@
   async function loadCatalog(){
     try{
       const data = await api("/api/characters");
+      currentUserRole = data.role || null;
+      applyAdminVisibility();
       const list = data.characters || [];
       characters.innerHTML = "";
 
@@ -1394,6 +1409,11 @@
   copyPromptDebugBtn.addEventListener("click", copyPromptDebug);
 
   function showPromptDebug(promptDebug){
+    if(!isAdmin()){
+      promptDebugEl.textContent = "";
+      promptDebugWrap.classList.add("hidden");
+      return;
+    }
     if(!promptDebug?.static_prefix && !promptDebug?.dynamic_suffix){
       promptDebugEl.textContent = "";
       promptDebugWrap.classList.add("hidden");
@@ -1738,6 +1758,19 @@
     await run(false);
   }
 
+  function resetBuilderInputs(){
+    [...characters.querySelectorAll('input[type="checkbox"]')].forEach(box => { box.checked = false; });
+    renderPairs();
+    setSelectedModel(DEFAULT_MODEL);
+    [...themeChoices.querySelectorAll('input[type="checkbox"]')].forEach(box => { box.checked = false; });
+    themeCustom.value = "";
+    writingStyle.value = "standard";
+    situation.value = "";
+    gm.value = "";
+    if(advancedSettings) advancedSettings.open = false;
+    updateSessionSummary();
+  }
+
   function newSimulation(){
     activeSessionRequest = null;
     activeLogSessionId = null;
@@ -1748,6 +1781,9 @@
     activeSharedRevision = -1;
     activeBranchMeta = null;
 
+    resetBuilderInputs();
+    historySidebar.classList.remove("open");
+    historyToggle.textContent = "☰ 履歴";
     simulationText.textContent = "";
     usageEl.textContent = "";
     showPromptDebug(null);
@@ -1959,15 +1995,21 @@
   let catalogLoaded = false;
 
   function showAuthState(session){
+    const wasSignedIn = !!authSession?.access_token;
     authSession = session || null;
     const signedIn = !!authSession?.access_token;
     authGate.classList.toggle("hidden", signedIn);
     app.classList.toggle("hidden", !signedIn);
+    if(signedIn && !wasSignedIn){
+      newSimulation();
+    }
     if(signedIn && !catalogLoaded){
       catalogLoaded = true;
       loadCatalog();
     }
     if(!signedIn){
+      currentUserRole = null;
+      applyAdminVisibility();
       catalogLoaded = false;
       characters.innerHTML = '<div class="hint">人物を読み込み中…</div>';
       savedSessionsEl.innerHTML = '<div class="hint">ログインすると保存済みセッションが表示されます。</div>';
