@@ -191,6 +191,7 @@
     <div class="topbar-actions">
       <button class="secondary logout admin-only" id="adminUsersBtn" type="button">ユーザー管理</button>
       <button class="secondary logout admin-only" id="adminCharactersBtn" type="button">Character追加</button>
+      <button class="secondary logout admin-only" id="adminRelationshipsBtn" type="button">Relationship追加</button>
       <button class="secondary logout" id="logoutBtn">ログアウト</button>
     </div>
   </div>
@@ -243,6 +244,44 @@
       <div class="admin-character-actions">
         <span id="adminCharacterStatus" class="admin-character-status"></span>
         <button class="primary" id="adminCharacterSaveBtn" type="submit">Characterを登録</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card admin-only hidden admin-character-panel" id="adminRelationshipsPanel">
+    <div class="admin-users-head">
+      <div>
+        <h2>Relationship追加</h2>
+        <p class="muted" style="margin:6px 0 0">Relationship Labで作成したPackageを、登録済みCharacter 2人の専用Relationshipとしてorbit-runtimeへ登録します。</p>
+      </div>
+      <button class="secondary" id="adminRelationshipsCloseBtn" type="button">閉じる</button>
+    </div>
+    <form id="adminRelationshipForm" class="admin-character-form">
+      <div class="admin-character-grid">
+        <label>Character A
+          <select id="adminRelationshipA" required></select>
+        </label>
+        <label>Character B
+          <select id="adminRelationshipB" required></select>
+        </label>
+        <label>Relationship ID
+          <input id="adminRelationshipIdPreview" type="text" readonly placeholder="Characterを2人選ぶと自動生成されます">
+          <span class="muted" style="margin-top:5px">Character IDから自動生成します。A/Bの選択順には依存しません。</span>
+        </label>
+        <label>Version（任意）
+          <input id="adminRelationshipVersion" type="text" maxlength="40" placeholder="例：1.0">
+        </label>
+      </div>
+      <div>
+        <div class="admin-character-package-head">
+          <label style="margin:0;flex:1">Relationship Package</label>
+          <input id="adminRelationshipFile" type="file" accept=".txt,text/plain">
+        </div>
+        <textarea id="adminRelationshipPackage" placeholder="Relationship LabのPackage出力をここへ貼り付けるか、txtファイルを選択してください。Referenceではなく実働Packageを登録します。" required></textarea>
+      </div>
+      <div class="admin-character-actions">
+        <span id="adminRelationshipStatus" class="admin-character-status"></span>
+        <button class="primary" id="adminRelationshipSaveBtn" type="submit">Relationshipを登録</button>
       </div>
     </form>
   </section>
@@ -476,6 +515,18 @@
   const adminCharacterPackage = document.getElementById("adminCharacterPackage");
   const adminCharacterStatus = document.getElementById("adminCharacterStatus");
   const adminCharacterSaveBtn = document.getElementById("adminCharacterSaveBtn");
+  const adminRelationshipsBtn = document.getElementById("adminRelationshipsBtn");
+  const adminRelationshipsPanel = document.getElementById("adminRelationshipsPanel");
+  const adminRelationshipsCloseBtn = document.getElementById("adminRelationshipsCloseBtn");
+  const adminRelationshipForm = document.getElementById("adminRelationshipForm");
+  const adminRelationshipA = document.getElementById("adminRelationshipA");
+  const adminRelationshipB = document.getElementById("adminRelationshipB");
+  const adminRelationshipIdPreview = document.getElementById("adminRelationshipIdPreview");
+  const adminRelationshipVersion = document.getElementById("adminRelationshipVersion");
+  const adminRelationshipFile = document.getElementById("adminRelationshipFile");
+  const adminRelationshipPackage = document.getElementById("adminRelationshipPackage");
+  const adminRelationshipStatus = document.getElementById("adminRelationshipStatus");
+  const adminRelationshipSaveBtn = document.getElementById("adminRelationshipSaveBtn");
 
   let activeSessionRequest = null;
   let activeLogSessionId = null;
@@ -487,6 +538,7 @@
   let activeBranchMeta = null;
   let savedSessionCatalog = [];
   let currentUserRole = null;
+  let adminCharacterCatalog = [];
   const logKeyCache = new Map();
   const LOG_ENCRYPTION_VERSION = "aes-gcm-v1";
 
@@ -1033,6 +1085,7 @@ ${error.message}`;
     adminUsersPanel.classList.toggle("hidden", !opening);
     if(opening){
       adminCharactersPanel?.classList.add("hidden");
+      adminRelationshipsPanel?.classList.add("hidden");
       await loadAdminUsers();
       adminUsersPanel.scrollIntoView({behavior:"smooth", block:"start"});
     }
@@ -1070,6 +1123,7 @@ ${error.message}`;
     adminCharactersPanel.classList.toggle("hidden", !opening);
     if(opening){
       adminUsersPanel?.classList.add("hidden");
+      adminRelationshipsPanel?.classList.add("hidden");
       adminCharactersPanel.scrollIntoView({behavior:"smooth", block:"start"});
     }
   });
@@ -1109,12 +1163,104 @@ ${error.message}`;
     }
   });
 
+
+  function relationshipIdFor(a, b){
+    const ids = [String(a || "").trim(), String(b || "").trim()].filter(Boolean).sort();
+    return ids.length === 2 && ids[0] !== ids[1] ? ids.join("__") : "";
+  }
+
+  function updateAdminRelationshipIdPreview(){
+    if(!adminRelationshipIdPreview) return;
+    adminRelationshipIdPreview.value = relationshipIdFor(adminRelationshipA?.value, adminRelationshipB?.value);
+  }
+
+  function populateAdminRelationshipCharacters(){
+    if(!adminRelationshipA || !adminRelationshipB) return;
+    const previousA = adminRelationshipA.value;
+    const previousB = adminRelationshipB.value;
+    const options = ['<option value="">選択してください</option>'].concat(
+      (adminCharacterCatalog || []).map(c => `<option value="${esc(c.id)}">${esc(c.display_name)} (${esc(c.id)})</option>`)
+    ).join("");
+    adminRelationshipA.innerHTML = options;
+    adminRelationshipB.innerHTML = options;
+    if((adminCharacterCatalog || []).some(c => c.id === previousA)) adminRelationshipA.value = previousA;
+    if((adminCharacterCatalog || []).some(c => c.id === previousB)) adminRelationshipB.value = previousB;
+    updateAdminRelationshipIdPreview();
+  }
+
+  adminRelationshipA?.addEventListener("change", updateAdminRelationshipIdPreview);
+  adminRelationshipB?.addEventListener("change", updateAdminRelationshipIdPreview);
+
+  adminRelationshipFile?.addEventListener("change", async () => {
+    const file = adminRelationshipFile.files?.[0];
+    if(!file) return;
+    try{
+      adminRelationshipPackage.value = await file.text();
+      adminRelationshipStatus.textContent = `読み込みました：${file.name}`;
+      adminRelationshipStatus.classList.remove("error-text");
+    }catch(error){
+      adminRelationshipStatus.textContent = `ファイルを読み込めませんでした：${error.message}`;
+      adminRelationshipStatus.classList.add("error-text");
+    }
+  });
+
+  adminRelationshipsBtn?.addEventListener("click", () => {
+    if(!isAdmin()) return;
+    const opening = adminRelationshipsPanel.classList.contains("hidden");
+    adminRelationshipsPanel.classList.toggle("hidden", !opening);
+    if(opening){
+      adminUsersPanel?.classList.add("hidden");
+      adminCharactersPanel?.classList.add("hidden");
+      populateAdminRelationshipCharacters();
+      adminRelationshipsPanel.scrollIntoView({behavior:"smooth", block:"start"});
+    }
+  });
+
+  adminRelationshipsCloseBtn?.addEventListener("click", () => {
+    adminRelationshipsPanel.classList.add("hidden");
+    adminRelationshipsBtn?.scrollIntoView({behavior:"smooth", block:"nearest"});
+  });
+
+  adminRelationshipForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if(!isAdmin()) return;
+    const participantA = adminRelationshipA.value;
+    const participantB = adminRelationshipB.value;
+    const version = (adminRelationshipVersion.value || "").trim();
+    const packageText = adminRelationshipPackage.value || "";
+    if(!participantA || !participantB || participantA === participantB){
+      adminRelationshipStatus.textContent = "異なるCharacterを2人選んでください。";
+      adminRelationshipStatus.classList.add("error-text");
+      return;
+    }
+    adminRelationshipSaveBtn.disabled = true;
+    adminRelationshipStatus.classList.remove("error-text");
+    adminRelationshipStatus.textContent = "GitHubへ登録中…";
+    try{
+      const data = await api("/api/admin/relationships/create", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({participant_a:participantA, participant_b:participantB, version, package_text:packageText})
+      });
+      adminRelationshipStatus.textContent = `登録しました：${data.relationship?.display_name || "Relationship"} (${data.relationship?.id || relationshipIdFor(participantA, participantB)})`;
+      adminRelationshipForm.reset();
+      populateAdminRelationshipCharacters();
+    }catch(error){
+      adminRelationshipStatus.textContent = `登録に失敗しました：${error.message}`;
+      adminRelationshipStatus.classList.add("error-text");
+    }finally{
+      adminRelationshipSaveBtn.disabled = false;
+    }
+  });
+
   async function loadCatalog(){
     try{
       const data = await api("/api/characters");
       currentUserRole = data.role || null;
       applyAdminVisibility();
       const list = data.characters || [];
+      adminCharacterCatalog = list;
+      populateAdminRelationshipCharacters();
       characters.innerHTML = "";
 
       for(const c of list){
