@@ -206,12 +206,14 @@
                 <button class="secondary" id="opusFrontPlaneBtn" type="button">前Plane 分解診断</button>
                 <button class="secondary" id="opusOutputLinesBtn" type="button">Output 一行診断</button>
                 <button class="secondary" id="opusOutputCombosBtn" type="button">Output 組合せ診断</button>
+                <button class="secondary" id="opusPatchedFrontBtn" type="button">前Plane全文・1行差替診断</button>
               </div>
               <div id="opusSmokeResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
               <div id="opusStagesResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
               <div id="opusFrontPlaneResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
               <div id="opusOutputLinesResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
               <div id="opusOutputCombosResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
+              <div id="opusPatchedFrontResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
             </div>
             <div class="advanced-section">
               <h3>テーマ</h3>
@@ -375,6 +377,8 @@
   const opusOutputLinesResult = document.getElementById("opusOutputLinesResult");
   const opusOutputCombosBtn = document.getElementById("opusOutputCombosBtn");
   const opusOutputCombosResult = document.getElementById("opusOutputCombosResult");
+  const opusPatchedFrontBtn = document.getElementById("opusPatchedFrontBtn");
+  const opusPatchedFrontResult = document.getElementById("opusPatchedFrontResult");
   const opusFrontPlaneResult = document.getElementById("opusFrontPlaneResult");
   const copyPromptDebugBtn = document.getElementById("copyPromptDebug");
   const situation = document.getElementById("situation");
@@ -1902,6 +1906,21 @@
 
 
 
+
+  opusPatchedFrontBtn.addEventListener("click", async () => {
+    const built = makeRequest(false);
+    if (!built?.request) { opusPatchedFrontResult.classList.remove("hidden"); opusPatchedFrontResult.textContent = "参加者を1人以上選んでください。"; return; }
+    opusPatchedFrontResult.classList.remove("hidden");
+    opusPatchedFrontResult.textContent = "前Plane全文で、Output 3行目だけ差し替えてOpus 5を診断中…";
+    opusPatchedFrontBtn.disabled = true;
+    try {
+      const payload={...built.request,execution:{model:"anthropic/claude-opus-5"}};
+      const data=await api("/api/debug/opus-front-plane-patched",{method:"POST",body:JSON.stringify(payload)});
+      const mark=data.status==="OK"?"✓":"✕";
+      opusPatchedFrontResult.textContent=[`model: ${data.model}`,`${mark} 前Plane全文 + Session input → ${data.status}`,"",`旧3行目: ${data.original_line3}`,`試験差替: ${data.replacement_line3}`,(data.status!=="OK"&&data.text)?`\n${data.text}`:""].join("\n");
+    } catch(e) { opusPatchedFrontResult.textContent=`前Plane全文診断に失敗: ${e.message || e}`; }
+    finally { opusPatchedFrontBtn.disabled=false; }
+  });
 
   opusOutputCombosBtn.addEventListener("click", async () => {
     const built = makeRequest(false);
