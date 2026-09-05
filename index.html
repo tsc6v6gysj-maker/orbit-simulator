@@ -1928,6 +1928,12 @@
         lines.push(`${mark} ${r.display} → ${r.status}`);
         if(r.status!=="OK" && r.text) lines.push(`  ${r.text}`);
       }
+      lines.push("","OK構文から情報を戻す試験");
+      for(const r of data.restoration_results || []){
+        const mark=r.status==="OK"?"✓":"✕";
+        lines.push(`${mark} ${r.display} → ${r.status}`);
+        if(r.status!=="OK" && r.text) lines.push(`  ${r.text}`);
+      }
       if(data.source_lines){
         lines.push("","現在の実文",`1: ${data.source_lines.line1}`,`2: ${data.source_lines.line2}`,`3: ${data.source_lines.line3}`);
       }
