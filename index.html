@@ -199,21 +199,13 @@
             </div>
             <div class="advanced-section">
               <h3>管理者用デバッグ</h3>
-              <p class="muted">Claude Opus 5 のAPI疎通と、現在の設定でORBITプロンプトのどの層から拒否が起きるかを確認します。</p>
+              <p class="muted">選択中モデルのAPI疎通と、現在の設定でORBITプロンプトのどの層から問題が起きるかを確認します。</p>
               <div class="actions" style="margin-top:8px">
-                <button class="secondary" id="opusSmokeBtn" type="button">Opus 5 疎通テスト</button>
+                <button class="secondary" id="opusSmokeBtn" type="button">モデル疎通テスト</button>
                 <button class="secondary" id="opusStagesBtn" type="button">ORBIT 段階診断</button>
-                <button class="secondary" id="opusFrontPlaneBtn" type="button">前Plane 分解診断</button>
-                <button class="secondary" id="opusOutputLinesBtn" type="button">Output 一行診断</button>
-                <button class="secondary" id="opusOutputCombosBtn" type="button">Output 組合せ診断</button>
-                <button class="secondary" id="opusPatchedFrontBtn" type="button">前Plane全文・1行差替診断</button>
               </div>
               <div id="opusSmokeResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
               <div id="opusStagesResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
-              <div id="opusFrontPlaneResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
-              <div id="opusOutputLinesResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
-              <div id="opusOutputCombosResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
-              <div id="opusPatchedFrontResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
             </div>
             <div class="advanced-section">
               <h3>テーマ</h3>
@@ -372,14 +364,6 @@
   const opusSmokeResult = document.getElementById("opusSmokeResult");
   const opusStagesBtn = document.getElementById("opusStagesBtn");
   const opusStagesResult = document.getElementById("opusStagesResult");
-  const opusFrontPlaneBtn = document.getElementById("opusFrontPlaneBtn");
-  const opusOutputLinesBtn = document.getElementById("opusOutputLinesBtn");
-  const opusOutputLinesResult = document.getElementById("opusOutputLinesResult");
-  const opusOutputCombosBtn = document.getElementById("opusOutputCombosBtn");
-  const opusOutputCombosResult = document.getElementById("opusOutputCombosResult");
-  const opusPatchedFrontBtn = document.getElementById("opusPatchedFrontBtn");
-  const opusPatchedFrontResult = document.getElementById("opusPatchedFrontResult");
-  const opusFrontPlaneResult = document.getElementById("opusFrontPlaneResult");
   const copyPromptDebugBtn = document.getElementById("copyPromptDebug");
   const situation = document.getElementById("situation");
   const gm = document.getElementById("gm");
@@ -1886,13 +1870,13 @@
 
   opusSmokeBtn.addEventListener("click", async () => {
     opusSmokeResult.classList.remove("hidden");
-    opusSmokeResult.textContent = "Opus 5 に極小プロンプトを送信中…";
+    opusSmokeResult.textContent = "選択中モデルに極小プロンプトを送信中…";
     opusSmokeBtn.disabled = true;
     try{
-      const data = await api("/api/debug/opus-smoke", { method:"POST" });
+      const data = await api("/api/debug/model-smoke", { method:"POST", body:JSON.stringify({ model:selectedModel() }) });
       const exact = data.exact_match === true ? "YES" : "NO";
       opusSmokeResult.textContent = [
-        `model: ${data.model || "(unknown)"}`,
+        `model: ${data.requested_model || data.returned_model || "(unknown)"}`,
         `exact match: ${exact}`,
         "",
         data.text || "(返答なし)"
@@ -1905,150 +1889,6 @@
   });
 
 
-
-
-  opusPatchedFrontBtn.addEventListener("click", async () => {
-    const built = makeRequest(false);
-    if (!built?.request) { opusPatchedFrontResult.classList.remove("hidden"); opusPatchedFrontResult.textContent = "参加者を1人以上選んでください。"; return; }
-    opusPatchedFrontResult.classList.remove("hidden");
-    opusPatchedFrontResult.textContent = "前Plane全文で、Output 3行目だけ差し替えてOpus 5を診断中…";
-    opusPatchedFrontBtn.disabled = true;
-    try {
-      const payload={...built.request,execution:{model:"anthropic/claude-opus-5"}};
-      const data=await api("/api/debug/opus-front-plane-patched",{method:"POST",body:JSON.stringify(payload)});
-      const mark=data.status==="OK"?"✓":"✕";
-      opusPatchedFrontResult.textContent=[`model: ${data.model}`,`${mark} 前Plane全文 + Session input → ${data.status}`,"",`旧3行目: ${data.original_line3}`,`試験差替: ${data.replacement_line3}`,(data.status!=="OK"&&data.text)?`\n${data.text}`:""].join("\n");
-    } catch(e) { opusPatchedFrontResult.textContent=`前Plane全文診断に失敗: ${e.message || e}`; }
-    finally { opusPatchedFrontBtn.disabled=false; }
-  });
-
-  opusOutputCombosBtn.addEventListener("click", async () => {
-    const built = makeRequest(false);
-    if (!built?.request) {
-      opusOutputCombosResult.classList.remove("hidden");
-      opusOutputCombosResult.textContent = "参加者を1人以上選んでください。";
-      return;
-    }
-    opusOutputCombosResult.classList.remove("hidden");
-    opusOutputCombosResult.textContent = "Output 冒頭3行の組合せをOpus 5で診断中…\n複数回APIを呼ぶため少し時間がかかります。";
-    opusOutputCombosBtn.disabled = true;
-    try {
-      const payload={...built.request,execution:{model:"anthropic/claude-opus-5"}};
-      const data=await api("/api/debug/opus-output-combinations",{method:"POST",body:JSON.stringify(payload)});
-      const lines=[`model: ${data.model || "anthropic/claude-opus-5"}`,"","Output 冒頭3行・組合せテスト"];
-      for(const r of data.results || []){
-        const mark=r.status==="OK"?"✓":"✕";
-        lines.push(`${mark} ${r.display} → ${r.status}`);
-        if(r.status!=="OK" && r.text) lines.push(`  ${r.text}`);
-      }
-      lines.push("","line 3 最小リフレーズ試験");
-      for(const r of data.replacement_results || []){
-        const mark=r.status==="OK"?"✓":"✕";
-        lines.push(`${mark} ${r.display} → ${r.status}`);
-        if(r.status!=="OK" && r.text) lines.push(`  ${r.text}`);
-      }
-      lines.push("","OK構文から情報を戻す試験");
-      for(const r of data.restoration_results || []){
-        const mark=r.status==="OK"?"✓":"✕";
-        lines.push(`${mark} ${r.display} → ${r.status}`);
-        if(r.status!=="OK" && r.text) lines.push(`  ${r.text}`);
-      }
-      if(data.source_lines){
-        lines.push("","現在の実文",`1: ${data.source_lines.line1}`,`2: ${data.source_lines.line2}`,`3: ${data.source_lines.line3}`);
-      }
-      opusOutputCombosResult.textContent=lines.join("\n");
-    }catch(e){
-      opusOutputCombosResult.textContent=`Output組合せ診断に失敗: ${e.message || e}`;
-    }finally{
-      opusOutputCombosBtn.disabled=false;
-    }
-  });
-
-  opusOutputLinesBtn.addEventListener("click", async () => {
-    const built = makeRequest(false);
-    if (!built?.request) {
-      opusOutputLinesResult.classList.remove("hidden");
-      opusOutputLinesResult.textContent = "参加者を1人以上選んでください。";
-      return;
-    }
-    opusOutputLinesResult.classList.remove("hidden");
-    opusOutputLinesResult.textContent = "preamble + Output を一行ずつ累積診断中…";
-    opusOutputLinesBtn.disabled = true;
-    try {
-      const payload={...built.request,execution:{model:"anthropic/claude-opus-5"}};
-      const data=await api("/api/debug/opus-output-lines",{method:"POST",body:JSON.stringify(payload)});
-      const lines=[`model: ${data.model || "anthropic/claude-opus-5"}`,"","Output 一行累積テスト"];
-      for (const r of data.results || []) {
-        const mark=r.status==="OK"?"✓":"✕";
-        lines.push(`${mark} ${r.display} → ${r.status}`);
-        if(r.status!=="OK" && r.text) lines.push(`  ${r.text}`);
-      }
-      if ((data.culprit_variants||[]).length) {
-        lines.push("","発火行の組み合わせ確認");
-        for(const r of data.culprit_variants){
-          const mark=r.status==="OK"?"✓":"✕";
-          lines.push(`${mark} ${r.display} → ${r.status}`);
-          if(r.status!=="OK" && r.text) lines.push(`  ${r.text}`);
-        }
-      }
-      opusOutputLinesResult.textContent=lines.join("\n");
-    } catch(e) {
-      opusOutputLinesResult.textContent=`Output一行診断に失敗: ${e.message || e}`;
-    } finally { opusOutputLinesBtn.disabled=false; }
-  });
-
-  opusFrontPlaneBtn.addEventListener("click", async () => {
-    const built = makeRequest(false);
-    if (!built?.request) {
-      opusFrontPlaneResult.classList.remove("hidden");
-      opusFrontPlaneResult.textContent = "参加者を1人以上選んでください。";
-      return;
-    }
-    const request = built.request;
-
-    opusFrontPlaneResult.classList.remove("hidden");
-    opusFrontPlaneResult.textContent = "前Planeをセクション単位でOpus 5へ送信中…\n最初の拒否箇所と、そのセクション単体の結果を確認します。";
-    opusFrontPlaneBtn.disabled = true;
-    try {
-      const payload = {
-        ...request,
-        execution:{ model:"anthropic/claude-opus-5" }
-      };
-      const data = await api("/api/debug/opus-front-plane", {
-        method:"POST",
-        body: JSON.stringify(payload)
-      });
-
-      const lines = [
-        `model: ${data.model || "anthropic/claude-opus-5"}`,
-        "",
-        "累積テスト"
-      ];
-      for (const r of data.cumulative || []) {
-        const mark = r.status === "OK" ? "✓" : "✕";
-        lines.push(`${mark} ${r.display} → ${r.status}`);
-        if (r.status !== "OK" && r.text) lines.push(`  ${r.text}`);
-      }
-      if (data.isolated) {
-        lines.push("", "失敗セクション単体テスト");
-        const r = data.isolated;
-        const mark = r.status === "OK" ? "✓" : "✕";
-        lines.push(`${mark} ${r.display} → ${r.status}`);
-        if (r.text) lines.push(`  ${r.text}`);
-        if (r.status === "OK") {
-          lines.push("", "→ 単体では通るため、直前までの前Planeとの組み合わせで拒否が発火しています。");
-        } else {
-          lines.push("", "→ このセクション単体でも拒否が再現します。次はこのセクション内部を分解します。");
-        }
-      }
-      opusFrontPlaneResult.textContent = lines.join("\n");
-    } catch (e) {
-      opusFrontPlaneResult.textContent = `前Plane診断に失敗: ${e.message || e}`;
-    } finally {
-      opusFrontPlaneBtn.disabled = false;
-    }
-  });
-
   opusStagesBtn.addEventListener("click", async () => {
     const built = makeRequest(false);
     if(!built?.request){
@@ -2058,21 +1898,21 @@
     }
 
     opusStagesResult.classList.remove("hidden");
-    opusStagesResult.textContent = "Opus 5 へ段階的にORBITプロンプトを送信中…\n最初の拒否を検出した時点で停止します。";
+    opusStagesResult.textContent = "選択中モデルへ段階的にORBITプロンプトを送信中…\n最初の拒否を検出した時点で停止します。";
     opusStagesBtn.disabled = true;
 
     try{
       const request = {
         ...built.request,
-        execution:{ model:"anthropic/claude-opus-5" }
+        execution:{ model:selectedModel() }
       };
-      const data = await api("/api/debug/opus-stages", {
+      const data = await api("/api/debug/model-stages", {
         method:"POST",
         body:JSON.stringify(request)
       });
 
       const lines = [
-        `model: ${data.model || "anthropic/claude-opus-5"}`,
+        `model: ${data.model || selectedModel()}`,
         "",
       ];
 
