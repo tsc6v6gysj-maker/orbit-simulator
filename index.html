@@ -199,11 +199,13 @@
             </div>
             <div class="advanced-section">
               <h3>管理者用デバッグ</h3>
-              <p class="muted">Claude Opus 5 のAPI疎通だけを確認します。ORBITの人物・関係・後planeは送信しません。</p>
+              <p class="muted">Claude Opus 5 のAPI疎通と、現在の設定でORBITプロンプトのどの層から拒否が起きるかを確認します。</p>
               <div class="actions" style="margin-top:8px">
                 <button class="secondary" id="opusSmokeBtn" type="button">Opus 5 疎通テスト</button>
+                <button class="secondary" id="opusStagesBtn" type="button">ORBIT 段階診断</button>
               </div>
               <div id="opusSmokeResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
+              <div id="opusStagesResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
             </div>
             <div class="advanced-section">
               <h3>テーマ</h3>
@@ -360,6 +362,8 @@
   const promptDebugEl = document.getElementById("promptDebug");
   const opusSmokeBtn = document.getElementById("opusSmokeBtn");
   const opusSmokeResult = document.getElementById("opusSmokeResult");
+  const opusStagesBtn = document.getElementById("opusStagesBtn");
+  const opusStagesResult = document.getElementById("opusStagesResult");
   const copyPromptDebugBtn = document.getElementById("copyPromptDebug");
   const situation = document.getElementById("situation");
   const gm = document.getElementById("gm");
@@ -1881,6 +1885,56 @@
       opusSmokeResult.textContent = `疎通テスト失敗: ${e.message || e}`;
     }finally{
       opusSmokeBtn.disabled = false;
+    }
+  });
+
+
+  opusStagesBtn.addEventListener("click", async () => {
+    const built = makeRequest(false);
+    if(!built?.request){
+      opusStagesResult.classList.remove("hidden");
+      opusStagesResult.textContent = "参加者を1人以上選んでください。";
+      return;
+    }
+
+    opusStagesResult.classList.remove("hidden");
+    opusStagesResult.textContent = "Opus 5 へ段階的にORBITプロンプトを送信中…\n最初の拒否を検出した時点で停止します。";
+    opusStagesBtn.disabled = true;
+
+    try{
+      const request = {
+        ...built.request,
+        execution:{ model:"anthropic/claude-opus-5" }
+      };
+      const data = await api("/api/debug/opus-stages", {
+        method:"POST",
+        body:JSON.stringify(request)
+      });
+
+      const lines = [
+        `model: ${data.model || "anthropic/claude-opus-5"}`,
+        "",
+      ];
+
+      (data.results || []).forEach((r, i) => {
+        const icon = r.status === "OK" ? "✓" : r.status === "REFUSED" ? "✕" : "!";
+        lines.push(`${icon} ${i + 1}. ${r.display || r.label} → ${r.status}`);
+        if(r.status !== "OK" && r.text){
+          lines.push(`   ${String(r.text).replace(/\s+/g, " ").slice(0, 260)}`);
+        }
+      });
+
+      if(data.stopped_early){
+        lines.push("", "最初の拒否/エラーを検出したため、ここで自動停止しました。");
+      }else{
+        lines.push("", "全段階 OK。実運用リクエストとの差分を次に確認します。");
+      }
+
+      opusStagesResult.textContent = lines.join("\n");
+    }catch(e){
+      opusStagesResult.textContent = `段階診断に失敗: ${e.message || e}`;
+    }finally{
+      opusStagesBtn.disabled = false;
     }
   });
 
