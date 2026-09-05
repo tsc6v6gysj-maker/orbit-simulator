@@ -198,6 +198,14 @@
               </div>
             </div>
             <div class="advanced-section">
+              <h3>管理者用デバッグ</h3>
+              <p class="muted">Claude Opus 5 のAPI疎通だけを確認します。ORBITの人物・関係・後planeは送信しません。</p>
+              <div class="actions" style="margin-top:8px">
+                <button class="secondary" id="opusSmokeBtn" type="button">Opus 5 疎通テスト</button>
+              </div>
+              <div id="opusSmokeResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
+            </div>
+            <div class="advanced-section">
               <h3>テーマ</h3>
               <p class="muted">今回の世界・事件の傾向を指定します。人物の性格・判断・口調は変えません。最大2つまで選べます。</p>
               <div class="theme-grid" id="themeChoices">
@@ -350,6 +358,8 @@
   const resolverEl = document.getElementById("resolver");
   const promptDebugWrap = document.getElementById("promptDebugWrap");
   const promptDebugEl = document.getElementById("promptDebug");
+  const opusSmokeBtn = document.getElementById("opusSmokeBtn");
+  const opusSmokeResult = document.getElementById("opusSmokeResult");
   const copyPromptDebugBtn = document.getElementById("copyPromptDebug");
   const situation = document.getElementById("situation");
   const gm = document.getElementById("gm");
@@ -1851,6 +1861,26 @@
         ...(activeSessionRequest.execution || {}),
         model: continuationModel.value
       };
+    }
+  });
+
+  opusSmokeBtn.addEventListener("click", async () => {
+    opusSmokeResult.classList.remove("hidden");
+    opusSmokeResult.textContent = "Opus 5 に極小プロンプトを送信中…";
+    opusSmokeBtn.disabled = true;
+    try{
+      const data = await api("/api/debug/opus-smoke", { method:"POST" });
+      const exact = data.exact_match === true ? "YES" : "NO";
+      opusSmokeResult.textContent = [
+        `model: ${data.model || "(unknown)"}`,
+        `exact match: ${exact}`,
+        "",
+        data.text || "(返答なし)"
+      ].join("\n");
+    }catch(e){
+      opusSmokeResult.textContent = `疎通テスト失敗: ${e.message || e}`;
+    }finally{
+      opusSmokeBtn.disabled = false;
     }
   });
 
