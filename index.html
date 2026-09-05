@@ -27,6 +27,16 @@
   .session-summary{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
   .summary-chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;padding:6px 10px;font-size:12px;color:var(--muted);background:var(--soft)}
   .advanced-settings{margin-top:14px}
+  .primary-settings{display:grid;gap:14px}
+  .primary-settings .advanced-section{border-top:1px solid var(--line);padding-top:14px}
+  .primary-settings .advanced-section:first-child{border-top:0;padding-top:0}
+  .model-current{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-top:10px}
+  .model-current-copy{min-width:0}
+  .model-current-name{font-weight:800}
+  .model-current-note{font-size:12px;color:var(--muted);margin-top:3px}
+  .model-picker{margin-top:10px}
+  .start-actions{margin-top:14px}
+  .detail-settings{margin-top:14px}
   .advanced-settings > summary{display:inline-flex;align-items:center;gap:6px;padding:9px 12px;border-radius:10px;background:var(--soft);color:var(--text);font-weight:700}
   .advanced-grid{display:grid;gap:14px;margin-top:12px}
   .advanced-section{border-top:1px solid var(--line);padding-top:14px}
@@ -251,44 +261,44 @@
 
     <div class="main-column">
       <section class="card session-home" id="sessionHome">
-        <div class="session-summary">
-          <span class="summary-chip" id="summaryParticipants">参加者：未選択</span>
-          <span class="summary-chip" id="summaryRelationship">関係：既定</span>
-          <span class="summary-chip" id="summaryModel">モデル：GPT-5.6 Sol</span>
-          <span class="summary-chip" id="summaryTheme">テーマ：指定なし</span>
+        <div class="primary-settings">
+          <div class="advanced-section">
+            <h3>キャラクター</h3>
+            <p class="muted">この場面に登場する人物を選びます。</p>
+            <div class="grid" id="characters"><div class="hint">人物を読み込み中…</div></div>
+          </div>
+          <div class="advanced-section">
+            <h3>今回の関係</h3>
+            <div id="pairs"><div class="hint">2人以上選ぶと、人物どうしの関係を指定できます。</div></div>
+          </div>
         </div>
 
-        <details class="advanced-settings" id="advancedSettings">
-          <summary>設定を変更</summary>
+        <h2 style="margin-top:18px">開始状況</h2>
+        <p class="muted">どんなところから始めるかを書きます。短くても大丈夫です。</p>
+        <textarea id="situation" rows="5" placeholder="例：参加者たちは夕方の市場で偶然居合わせた。"></textarea>
+
+        <div class="model-current">
+          <div class="model-current-copy">
+            <div class="model-current-name">使用モデル　<span id="currentModelName">GPT-5.6 Sol</span></div>
+            <div class="model-current-note" id="currentModelNote">成人向けの性的表現には対応していません。</div>
+          </div>
+          <button class="secondary" id="modelChangeBtn" type="button">変更</button>
+        </div>
+        <div class="model-picker hidden" id="modelPicker">
+          <div class="model-grid" id="modelChoices">
+            <label class="model-option"><input type="radio" name="orbitModel" value="openai/gpt-5.6-sol" checked><div class="model-head"><span>GPT-5.6 Sol</span><span class="model-tag">おすすめ</span></div><div class="model-copy">高速・低コスト・高品質。通常のシミュレーションにおすすめ。<strong> 成人向けの性的表現には対応していません。</strong></div></label>
+            <label class="model-option"><input type="radio" name="orbitModel" value="anthropic/claude-opus-5"><div class="model-head"><span>Claude Opus 5</span><span class="model-tag">品質優先</span></div><div class="model-copy">より時間とコストがかかりますが、複雑な人物再現や成人向け表現を含むシミュレーションに。</div></label>
+          </div>
+        </div>
+
+        <div class="actions start-actions">
+          <button class="primary" id="build">シミュレーションを開始</button>
+        </div>
+        <div id="error" class="error hidden"></div>
+
+        <details class="advanced-settings detail-settings" id="advancedSettings">
+          <summary>詳細設定（任意）</summary>
           <div class="advanced-grid">
-            <div class="advanced-section">
-              <h3>参加者</h3>
-              <p class="muted">この場面に登場する人物を選びます。</p>
-              <div class="grid" id="characters"><div class="hint">人物を読み込み中…</div></div>
-            </div>
-            <div class="advanced-section">
-              <h3>今回の関係</h3>
-              <p class="muted">人物どうしの関係を今回だけ指定したいときに選びます。指定しなければ、もともとの関係をそのまま使います。</p>
-              <div id="pairs"><div class="hint">2人以上選ぶと、人物どうしの関係を指定できます。</div></div>
-            </div>
-            <div class="advanced-section">
-              <h3>使用モデル</h3>
-              <p class="muted">生成モデルを選びます。人物・関係性・現在状態などの設定は変わりません。</p>
-              <div class="model-grid" id="modelChoices">
-                <label class="model-option"><input type="radio" name="orbitModel" value="openai/gpt-5.6-sol" checked><div class="model-head"><span>GPT-5.6 Sol</span><span class="model-tag">おすすめ</span></div><div class="model-copy">高速・低コスト・高品質。通常のシミュレーションや試行錯誤におすすめ。</div></label>
-                <label class="model-option"><input type="radio" name="orbitModel" value="anthropic/claude-opus-5"><div class="model-head"><span>Claude Opus 5</span><span class="model-tag">品質優先</span></div><div class="model-copy">より時間とコストはかかりますが、複雑な人物再現を最優先したいときに。</div></label>
-              </div>
-            </div>
-            <div class="advanced-section admin-only" id="adminDebugSection">
-              <h3>管理者用デバッグ</h3>
-              <p class="muted">選択中モデルのAPI疎通と、現在の設定でORBITプロンプトのどの層から問題が起きるかを確認します。</p>
-              <div class="actions" style="margin-top:8px">
-                <button class="secondary" id="opusSmokeBtn" type="button">モデル疎通テスト</button>
-                <button class="secondary" id="opusStagesBtn" type="button">ORBIT 段階診断</button>
-              </div>
-              <div id="opusSmokeResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
-              <div id="opusStagesResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
-            </div>
             <div class="advanced-section">
               <h3>テーマ</h3>
               <p class="muted">今回の世界・事件の傾向を指定します。人物の性格・判断・口調は変えません。最大2つまで選べます。</p>
@@ -303,23 +313,25 @@
               <p class="muted">発生した出来事の文章上の見せ方だけを変更します。人物・出来事・結末は変えません。</p>
               <select id="writingStyle"><option value="standard">標準</option><option value="romance_psychology">恋愛心理小説</option><option value="hardboiled">ハードボイルド</option><option value="nocturne">夜想文学</option><option value="warm_youth">温かな青春物語</option><option value="action">アクション</option><option value="classic_fantasy">王道ファンタジー</option><option value="light_novel">ライトノベル</option><option value="psychological_horror">心理ホラー</option></select>
             </div>
+            <div class="advanced-section">
+              <h3>世界・セッションの事実</h3>
+              <p class="muted">今回の世界で事実として扱うことを書きます。ここに書いた事実を、各キャラクターが知っているとは限りません。</p>
+              <textarea id="worldFacts" rows="4" placeholder="例：この街では夜間の外出が禁止されている。
+宿には一部屋しか空きがない。"></textarea>
+            </div>
+            <div class="advanced-section">
+              <h3>GMの指示</h3>
+              <p class="muted">この場面で起きることや、結果として固定したい条件があるときだけ指定します。</p>
+              <textarea id="gm" rows="3" placeholder="例：そのとき、外から大きな物音がする。"></textarea>
+            </div>
+            <div class="advanced-section admin-only" id="adminDebugSection">
+              <h3>管理者用デバッグ</h3>
+              <p class="muted">選択中モデルのAPI疎通と、現在の設定でORBITプロンプトのどの層から問題が起きるかを確認します。</p>
+              <div class="actions" style="margin-top:8px"><button class="secondary" id="opusSmokeBtn" type="button">モデル疎通テスト</button><button class="secondary" id="opusStagesBtn" type="button">ORBIT 段階診断</button></div>
+              <div id="opusSmokeResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div><div id="opusStagesResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
+            </div>
           </div>
         </details>
-
-        <h2 style="margin-top:18px">開始状況</h2>
-        <p class="muted">どんなところから始めるかを書きます。短くても大丈夫です。</p>
-        <textarea id="situation" rows="5" placeholder="例：参加者たちは夕方の市場で偶然居合わせた。"></textarea>
-        <details>
-          <summary>GMの指示（任意）</summary>
-          <textarea id="gm" rows="3" style="margin-top:10px" placeholder="この場面で起きることや、決めておきたい条件があれば書いてください。"></textarea>
-        </details>
-
-        <div class="actions">
-          <button class="secondary" id="randomSituation">🎲 開始状況だけランダム</button>
-          <button class="secondary" id="fullRandom">🎲 今回の設定をランダム</button>
-          <button class="primary" id="build">シミュレーションを開始</button>
-        </div>
-        <div id="error" class="error hidden"></div>
       </section>
 
   <section class="card hidden" id="result">
@@ -414,26 +426,6 @@
 
   const NAMES = { user:"あなた" };
 
-  const RANDOM_RELATION_FACTS = [
-    {label:"初対面",facts:["They have never met before."]},
-    {label:"面識がある",facts:["They have met before, but no further personal relationship is established."]},
-    {label:"以前一度だけ会った",facts:["They have met exactly once before."]},
-    {label:"以前一度だけ同じ仕事をした",facts:["They previously worked together once."]},
-    {label:"同じ組織に属するが個人的交流は未確定",facts:["They belong to the same organization, but no personal familiarity is established."]},
-    {label:"友人",facts:["They are friends."]},
-    {label:"恋人",facts:["They are romantic partners."]}
-  ];
-
-  const RANDOM_SITUATIONS = [
-    "参加者たちは昼下がりの市場で偶然居合わせた。",
-    "参加者たちは目的地へ向かう途中、急な雨で足止めされている。",
-    "参加者たちは同じ部屋で、それぞれ別のことをして過ごしている。",
-    "参加者たちは共同で簡単な作業を任されている。",
-    "参加者たちは食事の前後に同じ場所へ集まっている。",
-    "参加者たちは移動の待ち時間を一緒に過ごしている。",
-    "参加者たちは予定のない午後を同じ場所で過ごしている。"
-  ];
-
   const characters = document.getElementById("characters");
   const pairs = document.getElementById("pairs");
   const result = document.getElementById("result");
@@ -449,6 +441,7 @@
   const copyPromptDebugBtn = document.getElementById("copyPromptDebug");
   const situation = document.getElementById("situation");
   const gm = document.getElementById("gm");
+  const worldFacts = document.getElementById("worldFacts");
   const errorEl = document.getElementById("error");
   const buildBtn = document.getElementById("build");
   const simulationWrap = document.getElementById("simulationWrap");
@@ -601,6 +594,7 @@
     const sensitiveContext = {
       starting_conditions: activeSessionRequest.starting_conditions || "",
       gm_instructions: activeSessionRequest.gm_instructions || "",
+      world_session_facts: activeSessionRequest.world_session_facts || "",
       relationships: activeSessionRequest.relationships || [],
       theme: activeSessionRequest.theme || {themes:[], custom:""},
       rendering: activeSessionRequest.rendering || {writing_style:"standard"},
@@ -661,6 +655,7 @@
       relationships: activeSessionRequest?.relationships || [],
       starting_conditions: activeSessionRequest?.starting_conditions || "",
       gm_instructions: activeSessionRequest?.gm_instructions || "",
+      world_session_facts: activeSessionRequest?.world_session_facts || "",
       theme: activeSessionRequest?.theme || {themes:[], custom:""},
       rendering: activeSessionRequest?.rendering || {writing_style:"standard"},
       execution: activeSessionRequest?.execution || {model:DEFAULT_MODEL},
@@ -787,15 +782,21 @@
   const advancedSettings = document.getElementById("advancedSettings");
 
   function updateSessionSummary(){
-    const selectedCount = document.querySelectorAll('#characters input[type="checkbox"]:checked').length;
-    document.getElementById("summaryParticipants").textContent = selectedCount ? `参加者：${selectedCount}人` : "参加者：未選択";
-    const changed = [...document.querySelectorAll("#pairs select")].filter(x => x.value && x.value !== "auto").length;
-    document.getElementById("summaryRelationship").textContent = changed ? `関係：${changed}件変更` : "関係：既定";
-    document.getElementById("summaryModel").textContent = `モデル：${MODEL_LABELS[selectedModel()] || MODEL_LABELS[DEFAULT_MODEL]}`;
-    const themes = [...document.querySelectorAll('#themeChoices input[type="checkbox"]:checked')].map(x => x.nextElementSibling?.textContent?.trim()).filter(Boolean);
-    const custom = document.getElementById("themeCustom")?.value?.trim();
-    document.getElementById("summaryTheme").textContent = themes.length || custom ? `テーマ：${[...themes, ...(custom ? [custom] : [])].join(" / ")}` : "テーマ：指定なし";
+    const model = selectedModel();
+    const nameEl = document.getElementById("currentModelName");
+    const noteEl = document.getElementById("currentModelNote");
+    if(nameEl) nameEl.textContent = MODEL_LABELS[model] || MODEL_LABELS[DEFAULT_MODEL];
+    if(noteEl) noteEl.textContent = model === "openai/gpt-5.6-sol"
+      ? "成人向けの性的表現には対応していません。"
+      : "品質優先・高コスト。複雑な人物再現や成人向け表現を含む場合に。";
   }
+
+  const modelChangeBtn = document.getElementById("modelChangeBtn");
+  const modelPicker = document.getElementById("modelPicker");
+  modelChangeBtn?.addEventListener("click", () => {
+    const open = modelPicker?.classList.toggle("hidden") === false;
+    modelChangeBtn.textContent = open ? "閉じる" : "変更";
+  });
 
   historyToggle?.addEventListener("click", () => {
     const open = historySidebar.classList.toggle("open");
@@ -1122,13 +1123,9 @@ ${error.message}`;
         const label = document.createElement("label");
         label.className = "choice";
 
-        const aliasText = c.aliases?.length
-          ? `<br><span class="muted">${esc(c.aliases.join(" / "))}</span>`
-          : "";
-
         label.innerHTML =
           `<input type="checkbox" value="${esc(c.id)}">` +
-          `<div>${esc(c.display_name)}${aliasText}</div>`;
+          `<div>${esc(c.display_name)}</div>`;
 
         characters.appendChild(label);
       }
@@ -1137,7 +1134,7 @@ ${error.message}`;
       user.className = "choice";
       user.innerHTML =
         '<input type="checkbox" value="user">' +
-        '<div>自分も参加する<br><span class="muted">自分もこの場面に登場します</span></div>';
+        '<div>自分も参加する</div>';
 
       characters.appendChild(user);
 
@@ -1386,6 +1383,7 @@ ${error.message}`;
 
     situation.value = request.starting_conditions || "";
     gm.value = request.gm_instructions || "";
+    worldFacts.value = request.world_session_facts || "";
   }
 
   function showResumedSession(request){
@@ -1408,6 +1406,10 @@ ${error.message}`;
       (request.starting_conditions ? esc(request.starting_conditions) : '<span class="muted">指定なし</span>') +
       "</div>";
 
+    if(request.world_session_facts){
+      h += "<h3 style='margin-top:16px'>世界・セッションの事実</h3>";
+      h += `<div class="setup-item">${esc(request.world_session_facts)}</div>`;
+    }
     if(request.gm_instructions){
       h += "<h3 style='margin-top:16px'>GM指定</h3>";
       h += `<div class="setup-item">${esc(request.gm_instructions)}</div>`;
@@ -1437,6 +1439,7 @@ ${error.message}`;
         relationships:Array.isArray(context.relationships) ? context.relationships : [],
         starting_conditions:context.starting_conditions || "",
         gm_instructions:context.gm_instructions || "",
+        world_session_facts:context.world_session_facts || "",
         theme:context.theme || {themes:[], custom:""},
         rendering:context.rendering || {writing_style:"standard"},
         execution:context.execution || {model:DEFAULT_MODEL}
@@ -1543,7 +1546,6 @@ ${error.message}`;
               <span>今回の関係</span>
               <select class="condition">
                 <option value="none">指定なし</option>
-                <option value="random">🎲 ランダム</option>
                 <option value="first">初対面</option>
                 <option value="friends">友人</option>
                 <option value="romantic">恋人</option>
@@ -1569,14 +1571,7 @@ ${error.message}`;
     let label = "指定なし";
     let facts = [];
 
-    if(mode === "random"){
-      const r = RANDOM_RELATION_FACTS[
-        Math.floor(Math.random() * RANDOM_RELATION_FACTS.length)
-      ];
-      label = r.label;
-      facts = [...r.facts];
-
-    }else if(mode === "first"){
+    if(mode === "first"){
       label = "初対面";
       facts = ["They have never met before."];
 
@@ -1597,7 +1592,7 @@ ${error.message}`;
     return {label,facts};
   }
 
-  function makeRequest(forceRandom = false){
+  function makeRequest(){
     const ids = selected();
     if(!ids.length) return null;
 
@@ -1607,8 +1602,6 @@ ${error.message}`;
     document.querySelectorAll(".pair").forEach(el => {
       let mode = el.querySelector(".condition").value;
       const custom = el.querySelector(".custom").value;
-
-      if(forceRandom && mode === "none") mode = "random";
 
       const r = resolveCondition(mode, custom);
 
@@ -1627,13 +1620,6 @@ ${error.message}`;
 
     let start = situation.value.trim();
 
-    if(forceRandom && !start){
-      start = RANDOM_SITUATIONS[
-        Math.floor(Math.random() * RANDOM_SITUATIONS.length)
-      ];
-      situation.value = start;
-    }
-
     return {
       request:{
         participants:ids.map(id => ({
@@ -1643,6 +1629,7 @@ ${error.message}`;
         relationships,
         starting_conditions:start,
         gm_instructions:gm.value.trim(),
+        world_session_facts:worldFacts.value.trim(),
         theme:{
           themes:selectedThemes(),
           custom:themeCustom.value.trim()
@@ -1797,6 +1784,10 @@ ${error.message}`;
         : '<span class="muted">指定なし</span>') +
       "</div>";
 
+    if(request.world_session_facts){
+      h += "<h3 style='margin-top:16px'>世界・セッションの事実</h3>";
+      h += `<div class="setup-item">${esc(request.world_session_facts)}</div>`;
+    }
     if(request.gm_instructions){
       h += "<h3 style='margin-top:16px'>GM指定</h3>";
       h += `<div class="setup-item">${esc(request.gm_instructions)}</div>`;
@@ -2089,6 +2080,9 @@ ${error.message}`;
     writingStyle.value = "standard";
     situation.value = "";
     gm.value = "";
+    worldFacts.value = "";
+    if(modelPicker) modelPicker.classList.add("hidden");
+    if(modelChangeBtn) modelChangeBtn.textContent = "変更";
     if(advancedSettings) advancedSettings.open = false;
     updateSessionSummary();
   }
@@ -2122,12 +2116,12 @@ ${error.message}`;
     });
   }
 
-  async function run(forceRandom = false){
+  async function run(){
     errorEl.classList.add("hidden");
     result.classList.add("hidden");
     simulationWrap.classList.add("hidden");
 
-    const r = makeRequest(forceRandom);
+    const r = makeRequest();
 
     if(!r){
       errorEl.textContent = "登場人物を1人以上選んでください。";
@@ -2201,13 +2195,6 @@ ${error.message}`;
       buildBtn.textContent = "シミュレーションを開始";
     }
   }
-
-  document.getElementById("randomSituation").addEventListener("click", () => {
-    situation.value =
-      RANDOM_SITUATIONS[Math.floor(Math.random() * RANDOM_SITUATIONS.length)];
-  });
-
-  document.getElementById("fullRandom").addEventListener("click", () => run(true));
 
   setTimeout(updateSessionSummary, 0);
 
