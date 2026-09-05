@@ -1896,12 +1896,13 @@
 
 
   opusFrontPlaneBtn.addEventListener("click", async () => {
-    const request = buildRequest();
-    if (!request.participants?.length) {
+    const built = makeRequest(false);
+    if (!built?.request) {
       opusFrontPlaneResult.classList.remove("hidden");
       opusFrontPlaneResult.textContent = "参加者を1人以上選んでください。";
       return;
     }
+    const request = built.request;
 
     opusFrontPlaneResult.classList.remove("hidden");
     opusFrontPlaneResult.textContent = "前Planeをセクション単位でOpus 5へ送信中…\n最初の拒否箇所と、そのセクション単体の結果を確認します。";
