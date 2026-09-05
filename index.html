@@ -118,6 +118,22 @@
   .branch-nav-label{min-width:74px;text-align:center;white-space:nowrap}
   .branch-origin{display:inline-block;margin-right:7px;padding:2px 7px;border-radius:999px;background:var(--soft);font-size:11px;color:var(--muted);vertical-align:1px}
   .saved-branch-label{display:inline-block;margin-bottom:5px;padding:2px 7px;border-radius:999px;background:var(--soft);font-size:11px;color:var(--muted)}
+  .topbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+  .admin-users-panel{margin-top:14px}
+  .admin-users-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+  .admin-users-list{display:grid;gap:12px;margin-top:14px}
+  .admin-user-card{border:1px solid var(--line);border-radius:14px;padding:14px}
+  .admin-user-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+  .admin-user-email{font-weight:800;word-break:break-all}
+  .admin-user-id{font-size:11px;color:var(--muted);word-break:break-all;margin-top:4px}
+  .admin-user-meta{font-size:12px;color:var(--muted);margin-top:5px}
+  .admin-user-grid{display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:14px;margin-top:14px;align-items:start}
+  .admin-character-access{display:flex;gap:8px;flex-wrap:wrap;margin-top:7px}
+  .admin-character-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:7px 10px;font-size:13px}
+  .admin-character-chip input{width:16px;height:16px}
+  .admin-user-actions{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:13px;flex-wrap:wrap}
+  .admin-save-status{font-size:12px;color:var(--muted)}
+  .admin-save-status.error-text{color:var(--error)}
   @media(max-width:900px){
     main{max-width:880px}
     .history-toggle{display:inline-flex;margin-bottom:10px}
@@ -126,7 +142,7 @@
     .history-sidebar.open{display:block}
     .main-column{width:100%}
   }
-  @media(max-width:700px){.row{grid-template-columns:1fr}.model-grid{grid-template-columns:1fr}.saved-session-head{flex-direction:column}.saved-session button{width:100%}}
+  @media(max-width:700px){.row{grid-template-columns:1fr}.model-grid{grid-template-columns:1fr}.saved-session-head{flex-direction:column}.saved-session button{width:100%}.admin-user-grid{grid-template-columns:1fr}.admin-user-head{flex-direction:column}.topbar{align-items:flex-start}}
 </style>
 </head>
 <body>
@@ -152,8 +168,23 @@
       <h1>ORBIT <span class="badge">v0.12.1-session-home</span></h1>
       <p class="muted" style="margin-bottom:0">人物を選んで、状況を置く。あとは彼らにおまかせ。</p>
     </div>
-    <button class="secondary logout" id="logoutBtn">ログアウト</button>
+    <div class="topbar-actions">
+      <button class="secondary logout admin-only" id="adminUsersBtn" type="button">ユーザー管理</button>
+      <button class="secondary logout" id="logoutBtn">ログアウト</button>
+    </div>
   </div>
+
+  <section class="card admin-only hidden admin-users-panel" id="adminUsersPanel">
+    <div class="admin-users-head">
+      <div>
+        <h2>ユーザー管理</h2>
+        <p class="muted" style="margin:6px 0 0">登録ユーザーのroleと、利用できるCharacterを設定します。管理者は全Characterを利用できます。</p>
+      </div>
+      <button class="secondary" id="adminUsersCloseBtn" type="button">閉じる</button>
+    </div>
+    <div id="adminUsersStatus" class="hint" style="margin-top:12px">「ユーザー管理」を開くと一覧を読み込みます。</div>
+    <div id="adminUsersList" class="admin-users-list"></div>
+  </section>
 
   <div class="app-layout">
     <button class="secondary history-toggle" id="historyToggle" type="button">☰ 履歴</button>
@@ -384,6 +415,11 @@
   const shareSessionBtn = document.getElementById("shareSessionBtn");
   const revokeShareBtn = document.getElementById("revokeShareBtn");
   const savedSessionsEl = document.getElementById("savedSessions");
+  const adminUsersBtn = document.getElementById("adminUsersBtn");
+  const adminUsersPanel = document.getElementById("adminUsersPanel");
+  const adminUsersCloseBtn = document.getElementById("adminUsersCloseBtn");
+  const adminUsersStatus = document.getElementById("adminUsersStatus");
+  const adminUsersList = document.getElementById("adminUsersList");
 
   let activeSessionRequest = null;
   let activeLogSessionId = null;
@@ -651,7 +687,10 @@
     document.querySelectorAll(".admin-only").forEach(el => {
       el.classList.toggle("admin-visible", isAdmin());
     });
-    if(!isAdmin()) showPromptDebug(null);
+    if(!isAdmin()){
+      showPromptDebug(null);
+      adminUsersPanel?.classList.add("hidden");
+    }
   }
 
   function setSelectedModel(model){
@@ -785,6 +824,158 @@
     if(!res.ok) throw new Error(body?.message || body?.error || `HTTP ${res.status}`);
     return body;
   }
+
+  function formatAdminDate(value){
+    if(!value) return "—";
+    try{
+      return new Intl.DateTimeFormat("ja-JP", {year:"numeric",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}).format(new Date(value));
+    }catch{
+      return String(value);
+    }
+  }
+
+  function syncAdminCharacterControls(card){
+    const role = card.querySelector(".admin-role-select")?.value || "";
+    const isRoleAdmin = role === "admin";
+    card.querySelectorAll('.admin-character-access input[type="checkbox"]').forEach(box => {
+      box.disabled = isRoleAdmin;
+    });
+    const note = card.querySelector(".admin-character-note");
+    if(note){
+      note.textContent = isRoleAdmin
+        ? "管理者はCharacter個別設定に関係なく、すべて利用できます。"
+        : "ONにしたCharacterだけ、このユーザーの参加者候補に表示されます。";
+    }
+  }
+
+  function renderAdminUsers(data){
+    const users = Array.isArray(data?.users) ? data.users : [];
+    const catalog = Array.isArray(data?.characters) ? data.characters : [];
+    const currentUserId = data?.current_user_id || null;
+    adminUsersList.innerHTML = "";
+
+    if(!users.length){
+      adminUsersList.innerHTML = '<div class="hint">登録ユーザーが見つかりませんでした。</div>';
+      return;
+    }
+
+    for(const user of users){
+      const card = document.createElement("div");
+      card.className = "admin-user-card";
+      card.dataset.userId = user.id;
+      const isSelf = user.id === currentUserId;
+      const allowed = new Set(Array.isArray(user.character_ids) ? user.character_ids : []);
+
+      const roleOptions = [
+        `<option value="" ${user.role ? "" : "selected"}>未設定</option>`,
+        `<option value="tester" ${user.role === "tester" ? "selected" : ""}>tester</option>`,
+        `<option value="admin" ${user.role === "admin" ? "selected" : ""}>admin</option>`
+      ].join("");
+
+      const characterHtml = catalog.map(character => `
+        <label class="admin-character-chip">
+          <input type="checkbox" value="${esc(character.id)}" ${allowed.has(character.id) ? "checked" : ""}>
+          <span>${esc(character.display_name || character.id)}</span>
+        </label>`).join("");
+
+      card.innerHTML = `
+        <div class="admin-user-head">
+          <div>
+            <div class="admin-user-email">${esc(user.email || "（メールアドレスなし）")}${isSelf ? ' <span class="badge">現在の管理者</span>' : ""}</div>
+            <div class="admin-user-id">${esc(user.id)}</div>
+            <div class="admin-user-meta">登録 ${esc(formatAdminDate(user.created_at))} / 最終ログイン ${esc(formatAdminDate(user.last_sign_in_at))}</div>
+          </div>
+        </div>
+        <div class="admin-user-grid">
+          <label>role
+            <select class="admin-role-select" ${isSelf ? "disabled" : ""}>${roleOptions}</select>
+            ${isSelf ? '<span class="muted" style="margin-top:5px">自分自身のadmin権限はこの画面では解除できません。</span>' : ""}
+          </label>
+          <div>
+            <div style="font-size:13px;font-weight:700">利用できるCharacter</div>
+            <div class="admin-character-note muted" style="margin-top:4px"></div>
+            <div class="admin-character-access">${characterHtml || '<span class="muted">Characterがありません。</span>'}</div>
+          </div>
+        </div>
+        <div class="admin-user-actions">
+          <span class="admin-save-status"></span>
+          <button class="primary admin-user-save" type="button">保存</button>
+        </div>`;
+
+      const roleSelect = card.querySelector(".admin-role-select");
+      roleSelect?.addEventListener("change", () => syncAdminCharacterControls(card));
+      card.querySelector(".admin-user-save")?.addEventListener("click", () => saveAdminUser(card));
+      syncAdminCharacterControls(card);
+      adminUsersList.appendChild(card);
+    }
+  }
+
+  async function loadAdminUsers(){
+    if(!isAdmin()) return;
+    adminUsersStatus.classList.remove("hidden");
+    adminUsersStatus.textContent = "ユーザー一覧を読み込み中…";
+    adminUsersList.innerHTML = "";
+    try{
+      const data = await api("/api/admin/users");
+      renderAdminUsers(data);
+      adminUsersStatus.classList.add("hidden");
+    }catch(error){
+      adminUsersStatus.classList.remove("hidden");
+      adminUsersStatus.textContent = error.message.includes("SUPABASE_SERVICE_ROLE_KEY")
+        ? "Bridge側に SUPABASE_SERVICE_ROLE_KEY の設定が必要です。RailwayのVariablesへ追加してください。"
+        : `ユーザー一覧の読み込みに失敗しました。\
+${error.message}`;
+    }
+  }
+
+  async function saveAdminUser(card){
+    const saveBtn = card.querySelector(".admin-user-save");
+    const status = card.querySelector(".admin-save-status");
+    const role = card.querySelector(".admin-role-select")?.value || "";
+    if(!role){
+      status.textContent = "roleを選んでください。";
+      status.classList.add("error-text");
+      return;
+    }
+
+    const characterIds = [...card.querySelectorAll('.admin-character-access input[type="checkbox"]:checked')].map(box => box.value);
+    saveBtn.disabled = true;
+    status.classList.remove("error-text");
+    status.textContent = "保存中…";
+    try{
+      await api("/api/admin/users/update", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          user_id:card.dataset.userId,
+          role,
+          character_ids:characterIds
+        })
+      });
+      status.textContent = "保存しました。";
+      await loadAdminUsers();
+    }catch(error){
+      status.textContent = `保存に失敗しました：${error.message}`;
+      status.classList.add("error-text");
+    }finally{
+      saveBtn.disabled = false;
+    }
+  }
+
+  adminUsersBtn?.addEventListener("click", async () => {
+    if(!isAdmin()) return;
+    const opening = adminUsersPanel.classList.contains("hidden");
+    adminUsersPanel.classList.toggle("hidden", !opening);
+    if(opening){
+      await loadAdminUsers();
+      adminUsersPanel.scrollIntoView({behavior:"smooth", block:"start"});
+    }
+  });
+
+  adminUsersCloseBtn?.addEventListener("click", () => {
+    adminUsersPanel.classList.add("hidden");
+    adminUsersBtn?.scrollIntoView({behavior:"smooth", block:"nearest"});
+  });
 
   async function loadCatalog(){
     try{
