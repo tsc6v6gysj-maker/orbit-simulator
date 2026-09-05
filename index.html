@@ -205,13 +205,13 @@
                 <button class="secondary" id="opusStagesBtn" type="button">ORBIT 段階診断</button>
                 <button class="secondary" id="opusFrontPlaneBtn" type="button">前Plane 分解診断</button>
                 <button class="secondary" id="opusOutputLinesBtn" type="button">Output 一行診断</button>
-                <button class="secondary" id="opusPayloadDiffBtn" type="button">旧版↔現行 HTTP差分</button>
+                <button class="secondary" id="opusOutputCombosBtn" type="button">Output 組合せ診断</button>
               </div>
               <div id="opusSmokeResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
               <div id="opusStagesResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
               <div id="opusFrontPlaneResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
               <div id="opusOutputLinesResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
-              <div id="opusPayloadDiffResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
+              <div id="opusOutputCombosResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
             </div>
             <div class="advanced-section">
               <h3>テーマ</h3>
@@ -373,6 +373,8 @@
   const opusFrontPlaneBtn = document.getElementById("opusFrontPlaneBtn");
   const opusOutputLinesBtn = document.getElementById("opusOutputLinesBtn");
   const opusOutputLinesResult = document.getElementById("opusOutputLinesResult");
+  const opusOutputCombosBtn = document.getElementById("opusOutputCombosBtn");
+  const opusOutputCombosResult = document.getElementById("opusOutputCombosResult");
   const opusFrontPlaneResult = document.getElementById("opusFrontPlaneResult");
   const copyPromptDebugBtn = document.getElementById("copyPromptDebug");
   const situation = document.getElementById("situation");
@@ -1901,55 +1903,39 @@
 
 
 
-  opusPayloadDiffBtn.addEventListener("click", async () => {
+  opusOutputCombosBtn.addEventListener("click", async () => {
     const built = makeRequest(false);
     if (!built?.request) {
-      opusPayloadDiffResult.classList.remove("hidden");
-      opusPayloadDiffResult.textContent = "参加者を1人以上選んでください。";
+      opusOutputCombosResult.classList.remove("hidden");
+      opusOutputCombosResult.textContent = "参加者を1人以上選んでください。";
       return;
     }
-
-    opusPayloadDiffResult.classList.remove("hidden");
-    opusPayloadDiffResult.textContent = "同じORBITプロンプトから、モデル変更前Bridgeと現行BridgeのOpus HTTP requestを再構成して比較中…";
-    opusPayloadDiffBtn.disabled = true;
+    opusOutputCombosResult.classList.remove("hidden");
+    opusOutputCombosResult.textContent = "Output 冒頭3行の組合せをOpus 5で診断中…\n複数回APIを呼ぶため少し時間がかかります。";
+    opusOutputCombosBtn.disabled = true;
     try {
-      const payload = {
-        ...built.request,
-        execution: { model: "anthropic/claude-opus-5" }
-      };
-      const data = await api("/api/debug/opus-payload-diff", {
-        method: "POST",
-        body: JSON.stringify(payload)
-      });
-
-      const lines = [
-        `model: ${data.model || "anthropic/claude-opus-5"}`,
-        `HTTP request 完全一致: ${data.exact_match ? "YES" : "NO"}`,
-        ""
-      ];
-
-      if (data.exact_match) {
-        lines.push("✓ endpoint / method / headers / body / system / messages / cache設定 は完全一致");
-        lines.push("→ モデル切り替え前後で、Opusへ渡すHTTP requestに差はありません。");
-      } else {
-        lines.push("差分:");
-        for (const d of data.diffs || []) {
-          const fmt = (v) => {
-            if (typeof v === "string" && v.length > 240) return `${v.slice(0,240)}… (${v.length} chars)`;
-            try { return JSON.stringify(v); } catch { return String(v); }
-          };
-          lines.push(`• ${d.path}`);
-          lines.push(`  old: ${fmt(d.legacy)}`);
-          lines.push(`  new: ${fmt(d.current)}`);
-        }
+      const payload={...built.request,execution:{model:"anthropic/claude-opus-5"}};
+      const data=await api("/api/debug/opus-output-combinations",{method:"POST",body:JSON.stringify(payload)});
+      const lines=[`model: ${data.model || "anthropic/claude-opus-5"}`,"","Output 冒頭3行・組合せテスト"];
+      for(const r of data.results || []){
+        const mark=r.status==="OK"?"✓":"✕";
+        lines.push(`${mark} ${r.display} → ${r.status}`);
+        if(r.status!=="OK" && r.text) lines.push(`  ${r.text}`);
       }
-
-      lines.push("", "※ APIキーは伏せて比較しています。プロンプト本文は画面には展開しません。");
-      opusPayloadDiffResult.textContent = lines.join("\n");
-    } catch(e) {
-      opusPayloadDiffResult.textContent = `HTTP差分診断に失敗: ${e.message || e}`;
-    } finally {
-      opusPayloadDiffBtn.disabled = false;
+      lines.push("","line 3 最小リフレーズ試験");
+      for(const r of data.replacement_results || []){
+        const mark=r.status==="OK"?"✓":"✕";
+        lines.push(`${mark} ${r.display} → ${r.status}`);
+        if(r.status!=="OK" && r.text) lines.push(`  ${r.text}`);
+      }
+      if(data.source_lines){
+        lines.push("","現在の実文",`1: ${data.source_lines.line1}`,`2: ${data.source_lines.line2}`,`3: ${data.source_lines.line3}`);
+      }
+      opusOutputCombosResult.textContent=lines.join("\n");
+    }catch(e){
+      opusOutputCombosResult.textContent=`Output組合せ診断に失敗: ${e.message || e}`;
+    }finally{
+      opusOutputCombosBtn.disabled=false;
     }
   });
 
