@@ -205,11 +205,13 @@
                 <button class="secondary" id="opusStagesBtn" type="button">ORBIT 段階診断</button>
                 <button class="secondary" id="opusFrontPlaneBtn" type="button">前Plane 分解診断</button>
                 <button class="secondary" id="opusOutputLinesBtn" type="button">Output 一行診断</button>
+                <button class="secondary" id="opusPayloadDiffBtn" type="button">旧版↔現行 HTTP差分</button>
               </div>
               <div id="opusSmokeResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
               <div id="opusStagesResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
               <div id="opusFrontPlaneResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
               <div id="opusOutputLinesResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
+              <div id="opusPayloadDiffResult" class="hint hidden" style="margin-top:10px;white-space:pre-wrap"></div>
             </div>
             <div class="advanced-section">
               <h3>テーマ</h3>
@@ -1898,6 +1900,58 @@
 
 
 
+
+  opusPayloadDiffBtn.addEventListener("click", async () => {
+    const built = makeRequest(false);
+    if (!built?.request) {
+      opusPayloadDiffResult.classList.remove("hidden");
+      opusPayloadDiffResult.textContent = "参加者を1人以上選んでください。";
+      return;
+    }
+
+    opusPayloadDiffResult.classList.remove("hidden");
+    opusPayloadDiffResult.textContent = "同じORBITプロンプトから、モデル変更前Bridgeと現行BridgeのOpus HTTP requestを再構成して比較中…";
+    opusPayloadDiffBtn.disabled = true;
+    try {
+      const payload = {
+        ...built.request,
+        execution: { model: "anthropic/claude-opus-5" }
+      };
+      const data = await api("/api/debug/opus-payload-diff", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+
+      const lines = [
+        `model: ${data.model || "anthropic/claude-opus-5"}`,
+        `HTTP request 完全一致: ${data.exact_match ? "YES" : "NO"}`,
+        ""
+      ];
+
+      if (data.exact_match) {
+        lines.push("✓ endpoint / method / headers / body / system / messages / cache設定 は完全一致");
+        lines.push("→ モデル切り替え前後で、Opusへ渡すHTTP requestに差はありません。");
+      } else {
+        lines.push("差分:");
+        for (const d of data.diffs || []) {
+          const fmt = (v) => {
+            if (typeof v === "string" && v.length > 240) return `${v.slice(0,240)}… (${v.length} chars)`;
+            try { return JSON.stringify(v); } catch { return String(v); }
+          };
+          lines.push(`• ${d.path}`);
+          lines.push(`  old: ${fmt(d.legacy)}`);
+          lines.push(`  new: ${fmt(d.current)}`);
+        }
+      }
+
+      lines.push("", "※ APIキーは伏せて比較しています。プロンプト本文は画面には展開しません。");
+      opusPayloadDiffResult.textContent = lines.join("\n");
+    } catch(e) {
+      opusPayloadDiffResult.textContent = `HTTP差分診断に失敗: ${e.message || e}`;
+    } finally {
+      opusPayloadDiffBtn.disabled = false;
+    }
+  });
 
   opusOutputLinesBtn.addEventListener("click", async () => {
     const built = makeRequest(false);
